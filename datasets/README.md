@@ -1,8 +1,6 @@
 # 数据集
 
-表情模型用 RAF-DB，座舱画面用 KMU-FED。两份都只留在本机，不进 Git。许可不允许再转发这些脸。
-
-换电脑时把整个 `datasets` 目录拷过去。GitHub 上只有这份说明。
+表情模型用 RAF-DB，座舱画面用 KMU-FED。
 
 ## kmu-fed
 
