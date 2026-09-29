@@ -5,6 +5,8 @@ venv/
 .env
 .ipynb_checkpoints/
 data/
+datasets/*
+!datasets/README.md
 outputs/
 *.pt
 *.pth
