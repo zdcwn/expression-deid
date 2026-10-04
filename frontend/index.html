@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#10191b">
+  <title>Expression Lab · 座舱隐私实验台</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <a class="brand" href="#top" aria-label="Expression Lab 首页">
+        <span class="brand-mark"><span></span><span></span><span></span></span>
+        <span><b>EXPRESSION</b><em>LAB / 01</em></span>
+      </a>
+      <nav class="nav" aria-label="主导航">
+        <a class="nav-link is-active" href="#workspace">工作台</a>
+        <a class="nav-link" href="#report">评估报告</a>
+        <a class="nav-link" href="#method">项目说明</a>
+      </nav>
+      <div class="system-status"><i id="status-dot"></i><span id="status-text">正在连接本地模型</span></div>
+    </header>
+
+    <main id="top">
+      <section class="hero" id="workspace">
+        <div class="hero-copy">
+          <p class="eyebrow"><span>LOCAL INFERENCE</span><span>PRIVACY × EXPRESSION</span></p>
+          <h1>让表情留下，<br><strong>让身份隐去。</strong></h1>
+          <p class="hero-lede">座舱人脸去标识实验台。上传照片或车载视频，实时查看原始画面、脸部局部匿名化画面和表情分析。</p>
+          <div class="hero-tags"><span><i></i>原图只在本机处理</span><span><i></i>身份模型仅用于验收</span></div>
+        </div>
+        <div class="hero-visual" aria-hidden="true">
+          <div class="visual-grid"></div><div class="visual-orb orb-a"></div><div class="visual-orb orb-b"></div>
+          <div class="face-outline"><span class="eye left"></span><span class="eye right"></span><span class="nose"></span><span class="mouth"></span></div>
+          <span class="coordinate c1">34° 12′ 08″ N</span><span class="coordinate c2">LOCAL / 100×100</span><span class="coordinate c3">ID → 0.04</span>
+        </div>
+      </section>
+
+      <section class="workbench panel" aria-labelledby="workbench-title">
+        <div class="section-head"><div><p class="eyebrow">01 / INPUT</p><h2 id="workbench-title">选择一张图像开始</h2></div><span class="step-chip">GPU READY <i></i></span></div>
+        <div class="input-grid">
+          <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="上传图像">
+            <input id="file-input" type="file" accept="image/jpeg,image/png,image/webp">
+            <div class="upload-icon">↥</div><h3>拖入图像，或点击选择</h3><p>JPG / PNG / WEBP · 最大 10 MB</p><span class="drop-note">未上传的图像不会离开本机</span>
+          </div>
+          <div class="sample-picker"><div class="picker-label"><span>或使用数据集样例</span><span class="line"></span><span id="sample-count">—</span></div><div class="sample-list" id="sample-list"><div class="loading-line">正在读取已对齐样例…</div></div></div>
+        </div>
+        <div class="input-options"><label class="toggle"><input id="aligned-input" type="checkbox"><span class="toggle-ui"></span><span>图像已经是 256×256 对齐人脸</span></label><span class="option-hint">未勾选时，较大的原始画面会尝试自动找脸并对齐</span></div>
+        <div class="selected-file" id="selected-file" hidden><span class="file-symbol">IMG</span><div><b id="file-name">—</b><small id="file-meta">—</small></div><button class="quiet-button" id="clear-file" type="button">清除</button></div>
+        <button class="primary-button" id="run-button" type="button" disabled><span>运行匿名化分析</span><span class="button-arrow">→</span></button>
+        <div class="progress-area" id="progress-area" hidden><div class="progress-label"><span id="progress-text">正在加载模型…</span><span class="loader"></span></div><div class="progress-track"><i></i></div></div>
+        <div class="error-banner" id="error-banner" hidden></div>
+      </section>
+
+      <section class="video-workbench panel" id="video-workbench" aria-labelledby="video-title">
+        <div class="section-head"><div><p class="eyebrow">VIDEO / STREAM</p><h2 id="video-title">视频与摄像头分析</h2></div><span class="step-chip">逐帧本地处理 <i></i></span></div>
+        <p class="video-lede">选择车载摄像头视频，或打开本机摄像头。左侧保留原始画面，右侧只对人脸区域做匿名化，背景和车内环境保持不动。</p>
+        <div class="video-controls"><label class="video-file-button"><input id="video-file-input" type="file" accept="video/mp4,video/webm,video/quicktime">选择视频</label><button class="quiet-button video-action" id="camera-button" type="button">打开摄像头</button><button class="quiet-button video-action" id="video-start" type="button" disabled>开始分析</button><button class="quiet-button video-action" id="video-stop" type="button" disabled>停止</button><span class="option-hint" id="video-source-name">尚未选择视频</span><span class="option-hint">近红外画面若提示 no_face，需要近红外检测器或已裁切人脸输入</span></div>
+        <div class="video-grid"><div class="video-card"><div class="image-card-head"><span>ORIGINAL VIDEO</span><span class="muted">摄像头原始画面</span></div><video id="video-input" controls muted playsinline></video></div><div class="video-card"><div class="image-card-head"><span>ANONYMIZED VIDEO</span><span class="safe-badge"><i></i>脸部局部编辑</span></div><canvas id="video-output"></canvas></div></div>
+        <div class="video-reading"><span>当前表情 <b id="video-expression">—</b></span><span>匿名图置信度 <b id="video-confidence">—</b></span><span>表情模型输入 <b id="video-support">仅匿名图</b></span><span>处理帧率 <b id="video-fps">—</b></span><span>已处理帧 <b id="video-frame-count">0</b></span><span id="video-frame-status">等待视频</span></div>
+      </section>
+
+      <section class="results panel" id="results" aria-labelledby="results-title" hidden>
+        <div class="section-head"><div><p class="eyebrow">02 / OUTPUT</p><h2 id="results-title">匿名化结果</h2></div><span class="result-time" id="result-time">—</span></div>
+        <div class="comparison"><div class="image-card"><div class="image-card-head"><span>ORIGINAL INPUT</span><span class="muted" id="original-dim">100 × 100</span></div><div class="image-wrap"><img id="original-image" alt="原始人脸图像"></div><div class="image-caption" id="original-caption">模型输入</div></div><div class="swap-mark">→</div><div class="image-card output-card"><div class="image-card-head"><span>ANONYMIZED OUTPUT</span><span class="safe-badge"><i></i>身份已扰动</span></div><div class="image-wrap"><img id="anonymized-image" alt="匿名化人脸图像"></div><div class="image-caption" id="output-caption">模型输出</div></div></div>
+        <div class="metrics-grid"><article class="metric-card expression-card"><div class="metric-title"><span class="metric-icon">◒</span><span>匿名图表情识别</span><span class="metric-status pass" id="expression-status">匿名后识别</span></div><div class="metric-main"><div><small>原图</small><strong id="expression-original">—</strong><em id="expression-original-confidence">原图不进入表情模型</em></div><div class="metric-arrow">→</div><div><small>匿名图</small><strong id="expression-anonymized">—</strong><em id="expression-anonymized-confidence">—</em></div></div><div class="bar-label"><span>表情模型输入</span><b id="expression-consistency">仅匿名图输入</b></div><div class="meter"><i id="expression-meter"></i></div></article><article class="metric-card identity-card"><div class="metric-title"><span class="metric-icon">◎</span><span>身份保护诊断</span><span class="metric-status pass" id="identity-status">诊断关闭</span></div><div class="identity-main"><div><small>闭集模型原图</small><strong id="identity-original">—</strong><em id="identity-original-confidence">—</em></div><div><small>闭集模型匿名图</small><strong id="identity-anonymized">—</strong><em id="identity-anonymized-confidence">—</em></div><div><small>闭集结果变化</small><strong id="identity-change">未加载</strong></div><div><small>SFace 脸相似度</small><strong id="identity-cosine">—</strong></div><div><small id="identity-gallery-label">LFW 身份库原身份命中</small><strong id="identity-gallery-match">—</strong><em id="identity-gallery-confidence">—</em></div></div><div class="bar-label"><span>匿名后身份置信度下降</span><b id="identity-drop">—</b></div><div class="meter privacy-meter"><i id="identity-meter"></i></div></article></div>
+        <div class="result-foot"><span><i class="mini-dot"></i>处理完成 · <b id="result-device">—</b></span><span id="result-file">—</span></div>
+      </section>
+
+      <section class="report-section" id="report"><div class="section-head"><div><p class="eyebrow">03 / EVALUATION</p><h2>联合评估报告</h2></div><span class="report-note" id="report-updated">读取中…</span></div><div class="report-grid" id="report-grid"><div class="loading-line">正在读取评估结果…</div></div><div class="report-foot" id="report-scope"></div></section>
+
+      <section class="method panel" id="method"><div class="method-copy"><p class="eyebrow">04 / METHOD</p><h2>只改脸部，<br>保留车内画面。</h2><p>先把输入转成灰度，再只编辑检测到的人脸区域，按人脸框合成回原始画面。头发、背景、座舱和路况画面保持原样；表情模型只接收匿名化后的脸部。</p></div><div class="pipeline"><div class="pipeline-row"><span class="pipeline-num">01</span><div><b>视频逐帧输入</b><small>车载视频或摄像头 · 灰度化</small></div></div><div class="pipeline-line"></div><div class="pipeline-row"><span class="pipeline-num">02</span><div><b>脸部局部特征编辑</b><small>只改人脸区域 · 背景与头发保持</small></div></div><div class="pipeline-line"></div><div class="pipeline-row"><span class="pipeline-num">03</span><div><b>匿名图表情分析</b><small>只用匿名图 · 输出类别和真实置信度</small></div></div></div></section>
+    </main>
+    <footer><span>EXPRESSION LAB / LOCAL DEMO</span><span>Privacy by design · 2026</span></footer>
+  </div>
+  <script src="/app.js"></script>
+</body>
+</html>

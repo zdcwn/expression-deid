@@ -1,0 +1,26 @@
+group,name,relative_path,absolute_path_on_source_machine,exists,files,bytes,role,description,note
+datasets,kmu-fed,datasets/kmu-fed,D:\git-home\expression-deid\datasets\kmu-fed,True,1100,81035947,source,"KMU near-infrared cabin faces; 1,100 tracked source images",academic-only; do not redistribute
+datasets,kmu-fed-aligned,datasets/kmu-fed-aligned,D:\git-home\expression-deid\datasets\kmu-fed-aligned,True,1102,21406365,derived,256x256 grayscale aligned KMU images used by the desktop examples,rebuild with python -m expression_deid.prepare
+datasets,raf-db,datasets/raf-db,D:\git-home\expression-deid\datasets\raf-db,True,15339,63995264,training,RAF-DB aligned expression training images,non-commercial; follow the dataset license
+datasets,fer2013-hf,datasets/fer2013-hf,D:\git-home\expression-deid\datasets\fer2013-hf,True,6,621221633,training,FER2013 + FER+ high-consensus expression labels,follow source dataset and mirror terms
+datasets,ppb-emo,datasets/ppb-emo,D:\git-home\expression-deid\datasets\ppb-emo,True,225,1231992049,optional-domain,PPB-Emo central-IR neutral videos and extracted frames,CC BY 4.0/source terms; do not redistribute blindly
+datasets,lfw-sklearn,datasets/lfw-sklearn,D:\git-home\expression-deid\datasets\lfw-sklearn,True,13251,297462720,identity-source,"LFW source used to build the 1,680-person gallery",follow LFW terms
+datasets,lfw-gallery,datasets/lfw-gallery,D:\git-home\expression-deid\datasets\lfw-gallery,True,1682,32515740,identity-gallery,"derived 1,680-person identity diagnostic gallery",derived from LFW; diagnostic only
+datasets,kmu-machine-selected,datasets/kmu-machine-selected,D:\git-home\expression-deid\datasets\kmu-machine-selected,True,1102,5440788,derived-history,machine-privacy selected KMU candidates and manifest,generated evaluation artifact
+datasets,kmu-gan-aligned,datasets/kmu-gan-aligned,D:\git-home\expression-deid\datasets\kmu-gan-aligned,True,1102,5303519,derived-history,older GAN aligned candidates,generated evaluation artifact
+datasets,kmu-gan-strength100,datasets/kmu-gan-strength100,D:\git-home\expression-deid\datasets\kmu-gan-strength100,True,1102,5401739,derived-history,older GAN strength sweep candidates,generated evaluation artifact
+models,anonymizer_adversarial_v1.pt,models/anonymizer_adversarial_v1.pt,D:\git-home\expression-deid\models\anonymizer_adversarial_v1.pt,True,1,6290291,required,fast machine-targeted local anonymization,
+models,expression_machine_selector_texture.pt,models/expression_machine_selector_texture.pt,D:\git-home\expression-deid\models\expression_machine_selector_texture.pt,True,1,3493407,required,expression classifier used after anonymization,
+models,ganonymization_50.ckpt,models/ganonymization_50.ckpt,D:\git-home\expression-deid\models\ganonymization_50.ckpt,True,1,686311019,required-for-visual-output,landmark-only human-facing display anonymizer,
+models,face_landmarker.task,models/face_landmarker.task,D:\git-home\expression-deid\models\face_landmarker.task,True,1,3758596,required-for-visual-output,MediaPipe dense landmark asset,
+models,face_detection_yunet_2023mar.onnx,models/face_detection_yunet_2023mar.onnx,D:\git-home\expression-deid\models\face_detection_yunet_2023mar.onnx,True,1,232589,required,YuNet face detector,
+models,identity_faceonly.pt,models/identity_faceonly.pt,D:\git-home\expression-deid\models\identity_faceonly.pt,True,1,3494795,diagnostic,face-only identity diagnostic; never enters expression inference,
+models,face_recognition_sface_2021dec.onnx,models/face_recognition_sface_2021dec.onnx,D:\git-home\expression-deid\models\face_recognition_sface_2021dec.onnx,True,1,38696353,diagnostic,SFace similarity diagnostic,
+models,anonymizer.pt,models/anonymizer.pt,D:\git-home\expression-deid\models\anonymizer.pt,True,1,6289541,legacy-fallback,older anonymizer checkpoint,
+models,expression.pt,models/expression.pt,D:\git-home\expression-deid\models\expression.pt,True,1,3492001,legacy-fallback,older expression checkpoint,
+models,identity.pt,models/identity.pt,D:\git-home\expression-deid\models\identity.pt,True,1,3494209,legacy-fallback,older identity checkpoint,
+outputs,evaluation_machine_runtime_fast_strong_1681,outputs/evaluation_machine_runtime_fast_strong_1681,D:\git-home\expression-deid\outputs\evaluation_machine_runtime_fast_strong_1681,True,1101,7685000,report,canonical evaluation report,
+outputs,example_kmu_expressions.mp4,outputs/example_kmu_expressions.mp4,D:\git-home\expression-deid\outputs\example_kmu_expressions.mp4,True,1,157700,example,desktop example video,
+outputs,example_anger.mp4,outputs/example_anger.mp4,D:\git-home\expression-deid\outputs\example_anger.mp4,True,1,26549,example,desktop example video,
+outputs,example_surprise.mp4,outputs/example_surprise.mp4,D:\git-home\expression-deid\outputs\example_surprise.mp4,True,1,41040,example,desktop example video,
+outputs,example_mixed.mp4,outputs/example_mixed.mp4,D:\git-home\expression-deid\outputs\example_mixed.mp4,True,1,126349,example,desktop example video,

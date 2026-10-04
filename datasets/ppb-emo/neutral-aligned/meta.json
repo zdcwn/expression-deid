@@ -1,0 +1,11 @@
+{
+  "source": "PPB-Emo facial_expression_data / video-face-CIR / *-ND.mp4",
+  "align_size": 256,
+  "frames_per_video": 5,
+  "gray": "rec601 luminance, png",
+  "records": 185,
+  "fit_error_threshold_px": 12.0,
+  "ok": 183,
+  "review": 2,
+  "fail": 0
+}

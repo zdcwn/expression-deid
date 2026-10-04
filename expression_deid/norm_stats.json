@@ -1,0 +1,9 @@
+{
+  "channels": 1,
+  "space": "gray_0_1",
+  "mean": 0.481619,
+  "std": 0.242606,
+  "source": "datasets/raf-db/train",
+  "reducer": "all pixels, population std",
+  "images": 12271
+}

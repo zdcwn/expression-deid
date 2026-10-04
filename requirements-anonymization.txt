@@ -1,0 +1,3 @@
+# Optional landmark-conditioned anonymization backend.
+mediapipe==0.10.35
+scipy>=1.13

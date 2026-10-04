@@ -1,0 +1,405 @@
+{
+  "generated_at_utc": "2026-10-04T07:58:19+00:00",
+  "source_machine_root": "D:\\git-home\\expression-deid",
+  "warning": "This package records paths and inventory only. Large datasets and checkpoints remain local and are not copied into Git.",
+  "datasets": [
+    {
+      "name": "kmu-fed",
+      "relative_path": "datasets/kmu-fed",
+      "absolute_path_on_source_machine": "D:\\git-home\\expression-deid\\datasets\\kmu-fed",
+      "role": "source",
+      "description": "KMU near-infrared cabin faces; 1,100 tracked source images",
+      "note": "academic-only; do not redistribute",
+      "exists": true,
+      "files": 1100,
+      "bytes": 81035947,
+      "sample_files": [
+        "01_AN_mr_001.jpg",
+        "01_AN_mr_002.jpg",
+        "01_AN_mr_003.jpg",
+        "01_AN_mr_004.jpg",
+        "01_AN_mr_005.jpg"
+      ]
+    },
+    {
+      "name": "kmu-fed-aligned",
+      "relative_path": "datasets/kmu-fed-aligned",
+      "absolute_path_on_source_machine": "D:\\git-home\\expression-deid\\datasets\\kmu-fed-aligned",
+      "role": "derived",
+      "description": "256x256 grayscale aligned KMU images used by the desktop examples",
+      "note": "rebuild with python -m expression_deid.prepare",
+      "exists": true,
+      "files": 1102,
+      "bytes": 21406365,
+      "sample_files": [
+        "01_AN_mr_001.png",
+        "01_AN_mr_002.png",
+        "01_AN_mr_003.png",
+        "01_AN_mr_004.png",
+        "01_AN_mr_005.png"
+      ]
+    },
+    {
+      "name": "raf-db",
+      "relative_path": "datasets/raf-db",
+      "absolute_path_on_source_machine": "D:\\git-home\\expression-deid\\datasets\\raf-db",
+      "role": "training",
+      "description": "RAF-DB aligned expression training images",
+      "note": "non-commercial; follow the dataset license",
+      "exists": true,
+      "files": 15339,
+      "bytes": 63995264,
+      "sample_files": [
+        "train\\0\\train_00006.jpg",
+        "train\\0\\train_00010.jpg",
+        "train\\0\\train_00012.jpg",
+        "train\\0\\train_00013.jpg",
+        "train\\0\\train_00032.jpg"
+      ]
+    },
+    {
+      "name": "fer2013-hf",
+      "relative_path": "datasets/fer2013-hf",
+      "absolute_path_on_source_machine": "D:\\git-home\\expression-deid\\datasets\\fer2013-hf",
+      "role": "training",
+      "description": "FER2013 + FER+ high-consensus expression labels",
+      "note": "follow source dataset and mirror terms",
+      "exists": true,
+      "files": 6,
+      "bytes": 621221633,
+      "sample_files": [
+        "fer2013new.csv",
+        "ferplus_enhanced_train.csv",
+        "ferplus_enhanced_validation.csv",
+        "original\\fer2013.csv",
+        "test.pt"
+      ]
+    },
+    {
+      "name": "ppb-emo",
+      "relative_path": "datasets/ppb-emo",
+      "absolute_path_on_source_machine": "D:\\git-home\\expression-deid\\datasets\\ppb-emo",
+      "role": "optional-domain",
+      "description": "PPB-Emo central-IR neutral videos and extracted frames",
+      "note": "CC BY 4.0/source terms; do not redistribute blindly",
+      "exists": true,
+      "files": 225,
+      "bytes": 1231992049,
+      "sample_files": [
+        "Facial_expression_data.zip",
+        "neutral-aligned\\manifest.jsonl",
+        "neutral-aligned\\meta.json",
+        "neutral-aligned\\ppb_02_nd_0072.png",
+        "neutral-aligned\\ppb_02_nd_0261.png"
+      ]
+    },
+    {
+      "name": "lfw-sklearn",
+      "relative_path": "datasets/lfw-sklearn",
+      "absolute_path_on_source_machine": "D:\\git-home\\expression-deid\\datasets\\lfw-sklearn",
+      "role": "identity-source",
+      "description": "LFW source used to build the 1,680-person gallery",
+      "note": "follow LFW terms",
+      "exists": true,
+      "files": 13251,
+      "bytes": 297462720,
+      "sample_files": [
+        "lfw_home\\.gitignore",
+        "lfw_home\\joblib\\sklearn\\datasets\\_lfw\\_fetch_lfw_people\\8b015a6da4868ae43dcb55c6673fe359\\metadata.json",
+        "lfw_home\\joblib\\sklearn\\datasets\\_lfw\\_fetch_lfw_people\\8b015a6da4868ae43dcb55c6673fe359\\output.pkl",
+        "lfw_home\\joblib\\sklearn\\datasets\\_lfw\\_fetch_lfw_people\\func_code.py",
+        "lfw_home\\lfw_funneled\\Aaron_Eckhart\\Aaron_Eckhart_0001.jpg"
+      ]
+    },
+    {
+      "name": "lfw-gallery",
+      "relative_path": "datasets/lfw-gallery",
+      "absolute_path_on_source_machine": "D:\\git-home\\expression-deid\\datasets\\lfw-gallery",
+      "role": "identity-gallery",
+      "description": "derived 1,680-person identity diagnostic gallery",
+      "note": "derived from LFW; diagnostic only",
+      "exists": true,
+      "files": 1682,
+      "bytes": 32515740,
+      "sample_files": [
+        "Aaron_Peirsol.jpg",
+        "Aaron_Sorkin.jpg",
+        "Abdel_Nasser_Assidi.jpg",
+        "Abdoulaye_Wade.jpg",
+        "Abdullah.jpg"
+      ]
+    },
+    {
+      "name": "kmu-machine-selected",
+      "relative_path": "datasets/kmu-machine-selected",
+      "absolute_path_on_source_machine": "D:\\git-home\\expression-deid\\datasets\\kmu-machine-selected",
+      "role": "derived-history",
+      "description": "machine-privacy selected KMU candidates and manifest",
+      "note": "generated evaluation artifact",
+      "exists": true,
+      "files": 1102,
+      "bytes": 5440788,
+      "sample_files": [
+        "01_AN_mr_001.png",
+        "01_AN_mr_002.png",
+        "01_AN_mr_003.png",
+        "01_AN_mr_004.png",
+        "01_AN_mr_005.png"
+      ]
+    },
+    {
+      "name": "kmu-gan-aligned",
+      "relative_path": "datasets/kmu-gan-aligned",
+      "absolute_path_on_source_machine": "D:\\git-home\\expression-deid\\datasets\\kmu-gan-aligned",
+      "role": "derived-history",
+      "description": "older GAN aligned candidates",
+      "note": "generated evaluation artifact",
+      "exists": true,
+      "files": 1102,
+      "bytes": 5303519,
+      "sample_files": [
+        "01_AN_mr_001.png",
+        "01_AN_mr_002.png",
+        "01_AN_mr_003.png",
+        "01_AN_mr_004.png",
+        "01_AN_mr_005.png"
+      ]
+    },
+    {
+      "name": "kmu-gan-strength100",
+      "relative_path": "datasets/kmu-gan-strength100",
+      "absolute_path_on_source_machine": "D:\\git-home\\expression-deid\\datasets\\kmu-gan-strength100",
+      "role": "derived-history",
+      "description": "older GAN strength sweep candidates",
+      "note": "generated evaluation artifact",
+      "exists": true,
+      "files": 1102,
+      "bytes": 5401739,
+      "sample_files": [
+        "01_AN_mr_001.png",
+        "01_AN_mr_002.png",
+        "01_AN_mr_003.png",
+        "01_AN_mr_004.png",
+        "01_AN_mr_005.png"
+      ]
+    }
+  ],
+  "models": [
+    {
+      "name": "anonymizer_adversarial_v1.pt",
+      "relative_path": "models/anonymizer_adversarial_v1.pt",
+      "absolute_path_on_source_machine": "D:\\git-home\\expression-deid\\models\\anonymizer_adversarial_v1.pt",
+      "role": "required",
+      "description": "fast machine-targeted local anonymization",
+      "note": "",
+      "exists": true,
+      "files": 1,
+      "bytes": 6290291,
+      "sample_files": [
+        "anonymizer_adversarial_v1.pt"
+      ]
+    },
+    {
+      "name": "expression_machine_selector_texture.pt",
+      "relative_path": "models/expression_machine_selector_texture.pt",
+      "absolute_path_on_source_machine": "D:\\git-home\\expression-deid\\models\\expression_machine_selector_texture.pt",
+      "role": "required",
+      "description": "expression classifier used after anonymization",
+      "note": "",
+      "exists": true,
+      "files": 1,
+      "bytes": 3493407,
+      "sample_files": [
+        "expression_machine_selector_texture.pt"
+      ]
+    },
+    {
+      "name": "ganonymization_50.ckpt",
+      "relative_path": "models/ganonymization_50.ckpt",
+      "absolute_path_on_source_machine": "D:\\git-home\\expression-deid\\models\\ganonymization_50.ckpt",
+      "role": "required-for-visual-output",
+      "description": "landmark-only human-facing display anonymizer",
+      "note": "",
+      "exists": true,
+      "files": 1,
+      "bytes": 686311019,
+      "sample_files": [
+        "ganonymization_50.ckpt"
+      ]
+    },
+    {
+      "name": "face_landmarker.task",
+      "relative_path": "models/face_landmarker.task",
+      "absolute_path_on_source_machine": "D:\\git-home\\expression-deid\\models\\face_landmarker.task",
+      "role": "required-for-visual-output",
+      "description": "MediaPipe dense landmark asset",
+      "note": "",
+      "exists": true,
+      "files": 1,
+      "bytes": 3758596,
+      "sample_files": [
+        "face_landmarker.task"
+      ]
+    },
+    {
+      "name": "face_detection_yunet_2023mar.onnx",
+      "relative_path": "models/face_detection_yunet_2023mar.onnx",
+      "absolute_path_on_source_machine": "D:\\git-home\\expression-deid\\models\\face_detection_yunet_2023mar.onnx",
+      "role": "required",
+      "description": "YuNet face detector",
+      "note": "",
+      "exists": true,
+      "files": 1,
+      "bytes": 232589,
+      "sample_files": [
+        "face_detection_yunet_2023mar.onnx"
+      ]
+    },
+    {
+      "name": "identity_faceonly.pt",
+      "relative_path": "models/identity_faceonly.pt",
+      "absolute_path_on_source_machine": "D:\\git-home\\expression-deid\\models\\identity_faceonly.pt",
+      "role": "diagnostic",
+      "description": "face-only identity diagnostic; never enters expression inference",
+      "note": "",
+      "exists": true,
+      "files": 1,
+      "bytes": 3494795,
+      "sample_files": [
+        "identity_faceonly.pt"
+      ]
+    },
+    {
+      "name": "face_recognition_sface_2021dec.onnx",
+      "relative_path": "models/face_recognition_sface_2021dec.onnx",
+      "absolute_path_on_source_machine": "D:\\git-home\\expression-deid\\models\\face_recognition_sface_2021dec.onnx",
+      "role": "diagnostic",
+      "description": "SFace similarity diagnostic",
+      "note": "",
+      "exists": true,
+      "files": 1,
+      "bytes": 38696353,
+      "sample_files": [
+        "face_recognition_sface_2021dec.onnx"
+      ]
+    },
+    {
+      "name": "anonymizer.pt",
+      "relative_path": "models/anonymizer.pt",
+      "absolute_path_on_source_machine": "D:\\git-home\\expression-deid\\models\\anonymizer.pt",
+      "role": "legacy-fallback",
+      "description": "older anonymizer checkpoint",
+      "note": "",
+      "exists": true,
+      "files": 1,
+      "bytes": 6289541,
+      "sample_files": [
+        "anonymizer.pt"
+      ]
+    },
+    {
+      "name": "expression.pt",
+      "relative_path": "models/expression.pt",
+      "absolute_path_on_source_machine": "D:\\git-home\\expression-deid\\models\\expression.pt",
+      "role": "legacy-fallback",
+      "description": "older expression checkpoint",
+      "note": "",
+      "exists": true,
+      "files": 1,
+      "bytes": 3492001,
+      "sample_files": [
+        "expression.pt"
+      ]
+    },
+    {
+      "name": "identity.pt",
+      "relative_path": "models/identity.pt",
+      "absolute_path_on_source_machine": "D:\\git-home\\expression-deid\\models\\identity.pt",
+      "role": "legacy-fallback",
+      "description": "older identity checkpoint",
+      "note": "",
+      "exists": true,
+      "files": 1,
+      "bytes": 3494209,
+      "sample_files": [
+        "identity.pt"
+      ]
+    }
+  ],
+  "outputs": [
+    {
+      "name": "evaluation_machine_runtime_fast_strong_1681",
+      "relative_path": "outputs/evaluation_machine_runtime_fast_strong_1681",
+      "absolute_path_on_source_machine": "D:\\git-home\\expression-deid\\outputs\\evaluation_machine_runtime_fast_strong_1681",
+      "role": "report",
+      "description": "canonical evaluation report",
+      "note": "",
+      "exists": true,
+      "files": 1101,
+      "bytes": 7685000,
+      "sample_files": [
+        "01_AN_mr_001.png",
+        "01_AN_mr_002.png",
+        "01_AN_mr_003.png",
+        "01_AN_mr_004.png",
+        "01_AN_mr_005.png"
+      ]
+    },
+    {
+      "name": "example_kmu_expressions.mp4",
+      "relative_path": "outputs/example_kmu_expressions.mp4",
+      "absolute_path_on_source_machine": "D:\\git-home\\expression-deid\\outputs\\example_kmu_expressions.mp4",
+      "role": "example",
+      "description": "desktop example video",
+      "note": "",
+      "exists": true,
+      "files": 1,
+      "bytes": 157700,
+      "sample_files": [
+        "example_kmu_expressions.mp4"
+      ]
+    },
+    {
+      "name": "example_anger.mp4",
+      "relative_path": "outputs/example_anger.mp4",
+      "absolute_path_on_source_machine": "D:\\git-home\\expression-deid\\outputs\\example_anger.mp4",
+      "role": "example",
+      "description": "desktop example video",
+      "note": "",
+      "exists": true,
+      "files": 1,
+      "bytes": 26549,
+      "sample_files": [
+        "example_anger.mp4"
+      ]
+    },
+    {
+      "name": "example_surprise.mp4",
+      "relative_path": "outputs/example_surprise.mp4",
+      "absolute_path_on_source_machine": "D:\\git-home\\expression-deid\\outputs\\example_surprise.mp4",
+      "role": "example",
+      "description": "desktop example video",
+      "note": "",
+      "exists": true,
+      "files": 1,
+      "bytes": 41040,
+      "sample_files": [
+        "example_surprise.mp4"
+      ]
+    },
+    {
+      "name": "example_mixed.mp4",
+      "relative_path": "outputs/example_mixed.mp4",
+      "absolute_path_on_source_machine": "D:\\git-home\\expression-deid\\outputs\\example_mixed.mp4",
+      "role": "example",
+      "description": "desktop example video",
+      "note": "",
+      "exists": true,
+      "files": 1,
+      "bytes": 126349,
+      "sample_files": [
+        "example_mixed.mp4"
+      ]
+    }
+  ]
+}
