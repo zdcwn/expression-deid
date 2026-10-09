@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2026-10-09T00:10:34+00:00",
+  "generated_at_utc": "2026-10-09T00:15:52+00:00",
   "source_machine_root": "D:\\git-home\\expression-deid",
   "warning": "This package records paths and inventory only. Large datasets and checkpoints remain local and are not copied into Git.",
   "datasets": [
@@ -360,8 +360,8 @@
       "description": "2026-10-08/09 audit evidence; contains experimental candidates, not all deployed",
       "note": "",
       "exists": true,
-      "files": 115,
-      "bytes": 367985786,
+      "files": 117,
+      "bytes": 368032993,
       "sample_files": [
         "anonymous_motion_cache.npz",
         "anonymous_private_cache.npz",

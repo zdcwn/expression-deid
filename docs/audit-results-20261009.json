@@ -9575,5 +9575,18 @@
   "unit_tests": {
     "count": 52,
     "status": "pass"
+  },
+  "final_short_video_export": {
+    "frames": 24,
+    "decoded_frames": 24,
+    "seconds": 3.2865807999987737,
+    "fps": 7.302422018655058,
+    "analysis_seconds": 2.062423800001852,
+    "successful_analysis_frames": 24,
+    "analysis_fps": 11.636793562980822,
+    "device": "cuda",
+    "output": "outputs/full_audit_20261008/desktop_runtime/encoded_current.mp4",
+    "telemetry": "outputs/full_audit_20261008/desktop_runtime/encoded_current.jsonl",
+    "note": "Short startup run, not steady-state; uniform 24 analysis FPS acceptance still fails."
   }
 }
