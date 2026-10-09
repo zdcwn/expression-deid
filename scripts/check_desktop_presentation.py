@@ -68,7 +68,9 @@ def main():
     for payload,_,_,_ in page.results.values():
         assert payload['result']['expression_input_source']=='anonymized_only'
     # Cached thumbnails must show the selected sample without a new model worker.
-    last_worker=page.worker; page.sample_list.setCurrentRow(3); page.run_selected(); app.processEvents()
+    last_worker=page.worker
+    happy_index=next(i for i,item in enumerate(page.items) if item['label']==3)
+    page.sample_list.setCurrentRow(happy_index); page.run_selected(); app.processEvents()
     assert page.worker is last_worker
     assert page.truth_card.value_label.text()=='高兴'
     assert page.original_view[1].source_pixmap is not None
@@ -77,8 +79,11 @@ def main():
     results['checks'].append('all real example results, cached selection, anonymous-only provenance')
 
     window.select_page(1); video=window.pages[1]
+    assert [video.mode_combo.itemData(i) for i in range(video.mode_combo.count())] == ['fast', 'quality']
+    assert video.mode_combo.currentData() == 'fast'
     index=video.examples.findData('example_kmu_expressions.mp4'); assert index>=0
     video.examples.setCurrentIndex(index); video.play_example(); worker=video.worker
+    assert worker.mode == 'fast'
     errors=[]; count=[0]; loop=QEventLoop(); worker.worker_error.connect(errors.append)
     def receive(*payload):
         count[0]+=1

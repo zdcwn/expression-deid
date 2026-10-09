@@ -63,7 +63,11 @@ def set_image(label: QLabel, array: np.ndarray, *, max_size: QSize | None = None
 
 def samples() -> list[dict]:
     manifest = KMU_ALIGNED_DIR / "manifest.jsonl"
+    # Keep several deterministic examples per class so the desktop experiment
+    # page exercises more than one image while still loading from the existing
+    # aligned manifest.  A small fixed cap keeps the initial list responsive.
     result = {}
+    max_per_label = 4
     if not manifest.is_file():
         return []
     for line in manifest.read_text(encoding="utf-8").splitlines():
@@ -72,9 +76,41 @@ def samples() -> list[dict]:
         record = json.loads(line)
         label = int(record.get("label", -1))
         path = (KMU_ALIGNED_DIR / str(record.get("output", ""))).resolve()
-        if record.get('status') == 'ok' and 0 <= label < 7 and label not in result and path.is_file() and path.is_relative_to(KMU_ALIGNED_DIR.resolve()):
-            result[label] = {"label": label, "expression": record.get("expression", str(label)), "path": path, "source": record.get("source", path.name), "person": record.get("person", "")}
-    return [result[key] for key in sorted(result)]
+        if record.get('status') != 'ok' or not 0 <= label < 7:
+            continue
+        if not path.is_file() or not path.is_relative_to(KMU_ALIGNED_DIR.resolve()):
+            continue
+        bucket = result.setdefault(label, [])
+        if len(bucket) < max_per_label:
+            bucket.append({"label": label, "expression": record.get("expression", str(label)), "path": path, "source": record.get("source", path.name), "person": record.get("person", "")})
+    return [item for key in sorted(result) for item in result[key]]
+
+
+_EXPERIMENT_PIPELINES: dict[str, ExpressionDeidentifier] = {}
+_EXPERIMENT_PIPELINE_LOCK = threading.Lock()
+
+
+def _experiment_pipeline(device: str) -> ExpressionDeidentifier:
+    """Reuse the validated image pipeline across image selections.
+
+    Preserve the selected GAN visual and expression checkpoints, but skip the
+    identity gallery that this page does not display.  The separate diagnostic
+    factory remains available to offline audit scripts.
+    """
+    with _EXPERIMENT_PIPELINE_LOCK:
+        pipeline = _EXPERIMENT_PIPELINES.get(device)
+        if pipeline is None:
+            pipeline = build_pipeline(device, use_gan=True)
+            _EXPERIMENT_PIPELINES[device] = pipeline
+        return pipeline
+
+
+def release_experiment_pipeline_cache():
+    with _EXPERIMENT_PIPELINE_LOCK:
+        pipelines = list(_EXPERIMENT_PIPELINES.values())
+        _EXPERIMENT_PIPELINES.clear()
+    for pipeline in pipelines:
+        pipeline.close()
 
 
 def diagnostic_pipeline(device: str) -> ExpressionDeidentifier:
@@ -111,20 +147,17 @@ class ExperimentWorker(QThread):
         super().__init__(); self.items = items; self.device = device
 
     def run(self):
-        pipeline = None
         try:
             if self.isInterruptionRequested(): return
-            pipeline = diagnostic_pipeline(self.device)
+            pipeline = _experiment_pipeline(self.device)
             for index, item in enumerate(self.items, start=1):
                 if self.isInterruptionRequested(): return
                 started = time.perf_counter()
-                result = pipeline.process(item["path"], aligned=True, diagnostics=True)
+                result = pipeline.process(item["path"], aligned=True, diagnostics=False)
                 self.result_ready.emit({"item": item, "result": result}, index, len(self.items), time.perf_counter() - started)
             self.finished_all.emit(len(self.items))
         except Exception as exc:  # pragma: no cover - dependent on local model files
             self.error.emit(str(exc))
-        finally:
-            if pipeline is not None: pipeline.close()
 
 
 class ExperimentPage(QWidget):
@@ -238,8 +271,10 @@ class VideoWorker(QThread):
     worker_error = Signal(str)
     ended = Signal()
 
-    def __init__(self, source, device: str):
-        super().__init__(); self.source = source; self.device = device; self.running = True
+    def __init__(self, source, device: str, mode: str = "fast"):
+        super().__init__(); self.source = source; self.device = device
+        self.mode = mode if mode in {"fast", "quality"} else "fast"
+        self.running = True
         self.frame_pending = threading.Event()
 
     def stop(self): self.running = False
@@ -248,23 +283,27 @@ class VideoWorker(QThread):
         capture = None
         pipeline = display_pipeline = quality_predictor = None
         try:
-            # Match the web visual output while keeping the realtime analysis
-            # path responsive: the classifier pipeline stays on the fast local
-            # edit, and the human-facing GAN is refreshed every fifteen frames for
-            # display only.  FastVideoRunner never sends that display branch to
-            # the expression classifier.
+            # Both modes keep the privacy boundary: only the local anonymous
+            # result reaches the expression classifier.  Fast mode avoids loading
+            # the heavyweight GAN and quality checkpoint entirely.  Quality mode
+            # opts into those slower display/temporal branches explicitly.
             pipeline = build_pipeline(self.device, use_gan=False)
             if not self.running: return
-            display_pipeline = build_pipeline(self.device, use_gan=True)
-            if not self.running: return
-            quality_manifest = ROOT / 'models' / 'expression_video_quality.json'
-            if quality_manifest.is_file() and (ROOT / 'models' / 'expression_video_quality.ts.pt').is_file():
-                quality_predictor = QualityExpressionPredictor(self.device, manifest=quality_manifest)
+            if self.mode == "quality":
+                display_pipeline = build_pipeline(self.device, use_gan=True)
+                if not self.running: return
+                quality_manifest = ROOT / 'models' / 'expression_video_quality.json'
+                if quality_manifest.is_file() and (ROOT / 'models' / 'expression_video_quality.ts.pt').is_file():
+                    quality_predictor = QualityExpressionPredictor(self.device, manifest=quality_manifest)
+            else:
+                # The fast branch uses the same local pipeline for both output
+                # panes, avoiding a second model load and an unnecessary GAN.
+                display_pipeline = pipeline
             runner = FastVideoRunner(
                 pipeline,
                 detect_interval=1 if quality_predictor is not None else 5,
                 display_pipeline=display_pipeline,
-                display_interval=15,
+                display_interval=15 if self.mode == "quality" else 1,
                 expression_predictor=quality_predictor,
                 track_reset_gap=2.5 if quality_predictor is not None else .75,
             )
@@ -274,6 +313,7 @@ class VideoWorker(QThread):
             if not np.isfinite(source_fps) or source_fps <= 0:
                 source_fps = 30.0
             ticks = deque(maxlen=24); index = 0
+            next_video_tick = time.perf_counter()
             while self.running:
                 ok, bgr = capture.read()
                 if not ok: break
@@ -289,11 +329,21 @@ class VideoWorker(QThread):
                     self.frame_pending.set()
                     self.frame_ready.emit(qimage_from_array(pipeline._image_gray(rgb)), qimage_from_array(anonymized), label, confidence, fps, index)
                 index += 1
+                # Example/local videos should be observable at their source
+                # cadence.  Without this, the worker decodes as fast as the
+                # model permits and a five-second clip appears to jump past.
+                if kind != "camera":
+                    next_video_tick += 1.0 / source_fps
+                    delay = next_video_tick - time.perf_counter()
+                    if delay > 0:
+                        time.sleep(min(delay, 0.10))
+                    elif delay < -1.0:
+                        next_video_tick = time.perf_counter()
             self.ended.emit()
         except Exception as exc: self.worker_error.emit(str(exc))
         finally:
             if capture is not None: capture.release()
-            if display_pipeline is not None: display_pipeline.close()
+            if display_pipeline is not None and display_pipeline is not pipeline: display_pipeline.close()
             if pipeline is not None: pipeline.close()
 
 
@@ -310,6 +360,12 @@ class VideoPage(QWidget):
         self.camera_button = QPushButton('摄像头'); self.camera_button.setObjectName('primaryButton')
         self.camera_button.setIcon(line_icon('video', '#ffffff')); self.camera_button.clicked.connect(self.start_camera); bar.addWidget(self.camera_button)
         choose = QPushButton('本地视频'); choose.setIcon(line_icon('folder')); choose.clicked.connect(self.choose_video); bar.addWidget(choose)
+        bar.addWidget(label('运行模式', 'panelNote'))
+        self.mode_combo = QComboBox()
+        self.mode_combo.addItem('高速模式 · 实时优先', 'fast')
+        self.mode_combo.addItem('质量模式 · 准确优先', 'quality')
+        self.mode_combo.setToolTip('高速模式不加载 GAN 与质量模型；质量模式启用完整质量分支，启动更慢。')
+        bar.addWidget(self.mode_combo)
         self.examples = QComboBox()
         titles = {'example_kmu_expressions.mp4':'六类表情切换','example_mixed.mp4':'混合场景','example_anger.mp4':'愤怒示例','example_surprise.mp4':'惊讶示例'}
         for path in sorted((ROOT/'outputs').glob('example*.mp4')):
@@ -346,11 +402,17 @@ class VideoPage(QWidget):
             self.status.setText('正在停止上一段分析…')
             return
         self.pending_source = None
-        self.source_label.setText(text); self.status.setText("正在加载分析模型…")
+        mode_text = self.mode_combo.currentText()
+        self.source_label.setText(f'{text} · {mode_text}'); self.status.setText(f"正在加载{mode_text}…")
         self.source_label.setToolTip(text); self.fps_trace.reset(); self.confidence_meter.set_value(None)
         for card in (self.expression,self.confidence,self.fps,self.frame_card): card.set_value('—')
         self.original[1].clear_image('正在打开输入…'); self.anonymized[1].clear_image('正在加载分析模型…')
-        self.worker = VideoWorker(source, self.device); self.worker.setParent(self)
+        # Keep the worker constructor easy to replace in runtime checks while
+        # still applying the selected mode before the thread starts.
+        self.worker = VideoWorker(source, self.device)
+        if hasattr(self.worker, 'mode'):
+            self.worker.mode = self.mode_combo.currentData()
+        self.worker.setParent(self)
         self.accept_frames = True
         self.worker.frame_ready.connect(self._frame); self.worker.worker_error.connect(self._error)
         self.worker.ended.connect(self._ended); self.worker.finished.connect(self._worker_finished)
@@ -542,6 +604,7 @@ class MainWindow(QMainWindow):
             self.status.setText('正在停止分析并释放模型…')
             QTimer.singleShot(100, self.close)
         else:
+            release_experiment_pipeline_cache()
             event.accept()
 
 
