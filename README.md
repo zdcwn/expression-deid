@@ -81,6 +81,8 @@ python -m expression_deid infer --device cuda --anonymizer-checkpoint models/ano
 
 当前应用端是三页式 PySide6/Qt 桌面 UI，不依赖网页。它包含实验图片对照、实时摄像头/视频、整体模型表现三部分。视频和摄像头页显示实际分析处理均速，不把界面刷新率冒充模型帧率。机器匿名化与表情识别每帧运行，展示 GAN 每 15 帧刷新；RTX 3060 Laptop GPU 上，640×480 视频预热后复测约 32–34 FPS，首次推理和生成刷新仍有耗时峰值。先安装桌面依赖，再用 CUDA 启动：
 
+2026-10-09 桌面界面改为浅色工作区、深色导航和双画面对照。图片页提供缩略图与结果缓存；视频页在匿名画面叠加实际表情/置信度，并显示模型分析 FPS 曲线；模型表现页按 RAF、KMU、PPB 数据集切换，读取本次审计的保存记录，明确标注验证范围。支持 1100×760 及以上窗口；布局、字体与真实模型输出检查见 [`docs/desktop-design-20261009.md`](docs/desktop-design-20261009.md)。
+
 ```text
 # 三页式桌面 UI
 python -m pip install -r requirements-ui.txt
@@ -102,11 +104,11 @@ python -m expression_deid.app --mode image --input datasets/kmu-fed-aligned/01_A
 python -m expression_deid.app --mode examples --device cuda
 ```
 
-按 `q` 或 `Esc` 退出。实时视频不加载身份诊断模型；桌面实验图片页与离线评估加载身份/SFace/1681 人库。身份诊断不能进入表情标签或原图表情教师链路。
+OpenCV 演示窗口按 `q` 或 `Esc` 退出；Qt 桌面应用通过窗口关闭按钮退出。实时视频不加载身份诊断模型；桌面实验图片页与离线评估加载身份/SFace/1681 人库。身份诊断不能进入表情标签或原图表情教师链路。
 
 示例视频位于 `outputs/example_kmu_expressions.mp4`，桌面 UI 的实时页可以直接选择播放。
 
-2026-10-09 的视频表情优化默认使用 `models/expression_realtime_stable.pt`，加入匿名域微调、轻微光照/位置变化的一致性训练、固定轨迹素材和持续证据判断。尚未确认时显示“暂不确定”，不会硬猜中性。新权重只替换快速视频分类模型，单图/GAN 质量模式保持原权重。最新训练、逐帧检查、权重哈希和未通过项见 [`docs/full-audit-20261009.md`](docs/full-audit-20261009.md)；[`docs/realtime-expression-20261008.md`](docs/realtime-expression-20261008.md) 保留为旧权重的历史记录。通用表情和用户本人摄像头仍需进一步验证，整体模型表现页的旧离线报告不代表这次视频权重的结果。
+2026-10-09 的视频表情优化默认使用 `models/expression_realtime_stable.pt`，加入匿名域微调、轻微光照/位置变化的一致性训练、固定轨迹素材和持续证据判断。尚未确认时显示“暂不确定”，不会硬猜中性。新权重只替换快速视频分类模型，单图/GAN 质量模式保持原权重。最新训练、逐帧检查、权重哈希和未通过项见 [`docs/full-audit-20261009.md`](docs/full-audit-20261009.md)；[`docs/realtime-expression-20261008.md`](docs/realtime-expression-20261008.md) 保留为旧权重的历史记录。通用表情和用户本人摄像头仍需进一步验证；模型表现页呈现有日期的保存记录，不是当前摄像头的实时准确率。
 
 ## Python 视频演示
 
