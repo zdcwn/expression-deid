@@ -31,8 +31,31 @@ class SFaceGallery:
         if len(records) < max_identities:
             raise ValueError(f"身份干扰库只有 {len(records)} 个身份，需要至少 {max_identities} 个")
         self.records = records
-        embeddings = np.stack([self._feature(self._read(record["path"])) for record in records]).astype(np.float32)
+        if len({record['identity'] for record in records}) != len(records):
+            raise ValueError("身份干扰库存在重复身份")
+        embeddings = np.stack([self._feature(self._read(self._resolve_path(record["path"]))) for record in records]).astype(np.float32)
+        if not np.isfinite(embeddings).all() or (np.linalg.norm(embeddings, axis=1) <= 1e-12).any():
+            raise ValueError("身份图库嵌入包含无效数值")
         self.embeddings = embeddings / (np.linalg.norm(embeddings, axis=1, keepdims=True) + 1e-12)
+
+    def _resolve_path(self, value):
+        path = Path(str(value).replace('\\', '/'))
+        if path.is_absolute():
+            relocated = self.root / path.name
+            if relocated.is_file(): return relocated
+            raise FileNotFoundError(f'当前身份图库缺少图片: {relocated}')
+        if not path.is_absolute():
+            path = self.root / path
+        if not path.resolve().is_relative_to(self.root.resolve()):
+            raise ValueError('身份图库图片路径超出当前图库目录')
+        if path.is_file():
+            return path
+        # Old handoff archives used absolute Windows paths. The images live
+        # beside their manifest, so a relocated copy can resolve by filename.
+        relocated = self.root / Path(str(value).replace('\\', '/')).name
+        if relocated.is_file():
+            return relocated
+        raise FileNotFoundError(f"身份图库图片不存在: {path}")
 
     @staticmethod
     def _read(path):
@@ -55,6 +78,9 @@ class SFaceGallery:
     def compare(self, original, anonymized):
         original_feature = self._feature(original)
         anonymized_feature = self._feature(anonymized)
+        if (not np.isfinite(original_feature).all() or not np.isfinite(anonymized_feature).all()
+                or np.linalg.norm(original_feature) <= 1e-12 or np.linalg.norm(anonymized_feature) <= 1e-12):
+            raise ValueError("身份诊断收到无效嵌入")
         original_feature /= np.linalg.norm(original_feature) + 1e-12
         anonymized_feature /= np.linalg.norm(anonymized_feature) + 1e-12
         scores = np.concatenate((

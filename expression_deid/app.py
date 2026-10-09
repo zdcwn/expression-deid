@@ -20,6 +20,7 @@ Press ``q`` or ``Esc`` to close.  In ``examples`` mode, keys ``1`` through
 from __future__ import annotations
 
 import argparse
+from collections import deque
 import json
 import time
 from pathlib import Path
@@ -39,23 +40,26 @@ def _pick_checkpoint(candidates: tuple[Path, ...]) -> Path:
     return candidates[-1]
 
 
-def build_pipeline(device: str, *, use_gan: bool = True) -> ExpressionDeidentifier:
+def build_pipeline(device: str, *, use_gan: bool = True, expression_checkpoint: str | Path | None = None) -> ExpressionDeidentifier:
     """Load the validated fast models without loading the identity verifier."""
     anonymizer = _pick_checkpoint((
         ROOT / "models/anonymizer_adversarial_v1.pt",
         ROOT / "models/anonymizer.pt",
     ))
-    expression = _pick_checkpoint((
+    gan_checkpoint = ROOT / "models/ganonymization_50.ckpt"
+    gan_repo = ROOT / "external_ganonymization"
+    use_gan = bool(use_gan and gan_checkpoint.is_file() and gan_repo.is_dir())
+    candidates = (
         ROOT / "models/expression_machine_selector_texture.pt",
         ROOT / "models/expression_gan_strength100.pt",
         ROOT / "models/expression_gan_innerface.pt",
         ROOT / "models/expression_gan_final.pt",
         ROOT / "models/expression_anonymized.pt",
         ROOT / "models/expression.pt",
-    ))
-    gan_checkpoint = ROOT / "models/ganonymization_50.ckpt"
-    gan_repo = ROOT / "external_ganonymization"
-    use_gan = bool(use_gan and gan_checkpoint.is_file() and gan_repo.is_dir())
+    )
+    if not use_gan:
+        candidates = (ROOT / "models/expression_realtime_stable.pt", *candidates)
+    expression = Path(expression_checkpoint) if expression_checkpoint else _pick_checkpoint(candidates)
     import torch
 
     resolved_device = device
@@ -91,7 +95,7 @@ def _gray_bgr(gray: np.ndarray, size: tuple[int, int]) -> np.ndarray:
 
 
 def _panel(original_gray: np.ndarray, anonymized_gray: np.ndarray, *, expression: str,
-           confidence: float, fps: float, frame_index: int, device: str,
+           confidence: float | None, fps: float, frame_index: int, device: str,
            status: str = "ok", example_name: str = "") -> np.ndarray:
     """Build a side-by-side desktop view with an English overlay for OpenCV fonts."""
     target_h = 540
@@ -104,7 +108,9 @@ def _panel(original_gray: np.ndarray, anonymized_gray: np.ndarray, *, expression
     cv2.putText(bar, "ORIGINAL GRAYSCALE", (16, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.72, (220, 235, 235), 2, cv2.LINE_AA)
     cv2.putText(bar, "ANONYMIZED FACE / EXPRESSION", (target_w + 16, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.72, (100, 245, 215), 2, cv2.LINE_AA)
     cv2.putText(bar, f"{device.upper()}   {fps:5.1f} FPS   frame {frame_index}", (16, 58), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (160, 185, 185), 1, cv2.LINE_AA)
-    label = f"{expression}   confidence {confidence * 100:.1f}%" if status == "ok" else status
+    label = expression if confidence is None else f"{expression}   confidence {confidence * 100:.1f}%"
+    if status != "ok":
+        label = status
     cv2.putText(bar, label, (target_w + 16, 58), cv2.FONT_HERSHEY_SIMPLEX, 0.60, (100, 245, 215) if status == "ok" else (80, 190, 255), 2, cv2.LINE_AA)
     canvas = np.vstack([bar, canvas])
     if example_name:
@@ -153,20 +159,29 @@ def run_image(pipeline: ExpressionDeidentifier, path: Path, *, device: str, exam
     return 0
 
 
-def run_stream(pipeline: ExpressionDeidentifier, capture: cv2.VideoCapture, *, device: str, detect_interval: int, max_width: int) -> int:
-    runner = FastVideoRunner(pipeline, detect_interval=detect_interval)
+def run_stream(pipeline: ExpressionDeidentifier, capture: cv2.VideoCapture, *, device: str, detect_interval: int, max_width: int, source_fps: float | None = None) -> int:
+    display = build_pipeline(device, use_gan=True) if pipeline.ganonymization_backend is None else pipeline
+    runner = FastVideoRunner(pipeline, detect_interval=detect_interval, display_pipeline=display, display_interval=15)
     frame_index = 0
     started = time.perf_counter()
+    analysis_times = deque(maxlen=24)
+    analysis_seconds = 0.0
+    successful = 0
     try:
         while True:
             ok, bgr = capture.read()
             if not ok:
                 break
             rgb = _resize_rgb(cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB), max_width)
-            anonymized, info = runner.process_frame(rgb, frame_index)
-            elapsed = max(1e-6, time.perf_counter() - started)
-            fps = (frame_index + 1) / elapsed
-            panel = _panel(pipeline._image_gray(rgb), anonymized, expression=info.get("expression", "NO FACE"), confidence=float(info.get("confidence") or 0.0), fps=fps, frame_index=frame_index, device=str(pipeline.device), status=info.get("status", "ok"))
+            timestamp = frame_index / source_fps if source_fps else time.monotonic()
+            analysis_started = time.perf_counter()
+            anonymized, info = runner.process_frame(rgb, frame_index, timestamp=timestamp)
+            duration = time.perf_counter() - analysis_started
+            analysis_times.append((duration, info.get('status') == 'ok'))
+            analysis_seconds += duration
+            successful += info.get('status') == 'ok'
+            fps = sum(done for _, done in analysis_times) / max(1e-6, sum(duration for duration, _ in analysis_times))
+            panel = _panel(pipeline._image_gray(rgb), anonymized, expression=info.get("expression") or "NO FACE", confidence=info.get("confidence"), fps=fps, frame_index=frame_index, device=str(pipeline.device), status=info.get("status", "ok"))
             cv2.imshow("Expression De-identification · Python", cv2.cvtColor(panel, cv2.COLOR_RGB2BGR))
             frame_index += 1
             key = cv2.waitKey(1) & 0xFF
@@ -174,8 +189,9 @@ def run_stream(pipeline: ExpressionDeidentifier, capture: cv2.VideoCapture, *, d
                 break
     finally:
         capture.release()
+        if display is not pipeline: display.close()
         cv2.destroyAllWindows()
-    print(json.dumps({"mode": "stream", "frames": frame_index, "fps": frame_index / max(1e-6, time.perf_counter() - started), "device": str(pipeline.device), "expression_input_source": "anonymized_only"}, ensure_ascii=False, indent=2))
+    print(json.dumps({"mode": "stream", "frames": frame_index, "fps": frame_index / max(1e-6, time.perf_counter() - started), "successful_analysis_frames": successful, "analysis_fps": successful / max(1e-6, analysis_seconds), "device": str(pipeline.device), "expression_input_source": "anonymized_only"}, ensure_ascii=False, indent=2))
     return 0
 
 
@@ -216,6 +232,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--detect-interval", type=int, default=5, help="视频模式每隔多少帧重新检测人脸")
     parser.add_argument("--max-width", type=int, default=960, help="处理前把视频帧缩到的最大宽度，降低延迟")
     parser.add_argument("--stream-quality", choices=("fast", "quality"), default="fast", help="视频/摄像头：fast 使用轻量局部编辑，quality 启用 landmark-only 生成器")
+    parser.add_argument("--expression-checkpoint", help="显式指定表情权重，用于复测或回退")
     return parser
 
 
@@ -224,18 +241,25 @@ def main(argv=None) -> int:
     if args.mode in {"video", "image"} and not args.input:
         raise SystemExit(f"--mode {args.mode} 需要同时提供 --input")
     use_gan = args.mode in {"image", "examples"} or args.stream_quality == "quality"
-    pipeline = build_pipeline(args.device, use_gan=use_gan)
-    if args.mode == "image":
-        return run_image(pipeline, Path(args.input), device=args.device)
-    if args.mode == "examples":
-        return run_examples(pipeline, device=args.device)
-    if args.mode == "video":
-        capture = cv2.VideoCapture(str(Path(args.input)))
-    else:
-        capture = cv2.VideoCapture(int(args.camera_index), cv2.CAP_DSHOW)
-    if not capture.isOpened():
-        raise SystemExit("无法打开视频或摄像头，请检查输入路径、摄像头权限和索引。")
-    return run_stream(pipeline, capture, device=args.device, detect_interval=args.detect_interval, max_width=args.max_width)
+    pipeline = build_pipeline(args.device, use_gan=use_gan, expression_checkpoint=args.expression_checkpoint)
+    try:
+        if args.mode == "image":
+            return run_image(pipeline, Path(args.input), device=args.device)
+        if args.mode == "examples":
+            return run_examples(pipeline, device=args.device)
+        if args.mode == "video":
+            capture = cv2.VideoCapture(str(Path(args.input)))
+        else:
+            capture = cv2.VideoCapture(int(args.camera_index), cv2.CAP_DSHOW)
+        if not capture.isOpened():
+            raise SystemExit("无法打开视频或摄像头，请检查输入路径、摄像头权限和索引。")
+        source_fps = None
+        if args.mode == "video":
+            rate = capture.get(cv2.CAP_PROP_FPS)
+            source_fps = rate if np.isfinite(rate) and rate > 0 else 30.0
+        return run_stream(pipeline, capture, device=args.device, detect_interval=args.detect_interval, max_width=args.max_width, source_fps=source_fps)
+    finally:
+        pipeline.close()
 
 
 if __name__ == "__main__":

@@ -17,6 +17,10 @@ from expression_deid.config import KMU_ALIGNED_DIR, ROOT
 from expression_deid.prepare import iter_kmu_aligned
 
 
+class AnonymizationUnavailable(RuntimeError):
+    """Required local-edit resources are missing; original pixels must not pass."""
+
+
 class ExpressionDeidentifier:
     # Canonical aligned-face region used only by the identity diagnostics.
     # Hair, cabin background and the outer image corners are excluded from
@@ -32,10 +36,16 @@ class ExpressionDeidentifier:
                  identity_gallery_size=DEFAULT_IDENTITY_GALLERY_SIZE,
                  privacy_candidates=6, privacy_selection=True):
         torch, _, _ = require_torch()
+        if str(device) == 'auto':
+            device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.device = torch.device(device)
+        if self.device.type == 'cuda' and not torch.cuda.is_available():
+            raise RuntimeError('指定了 CUDA，但当前环境没有可用 CUDA')
+        self.diagnostic_errors = []
         self.fast_mode = bool(fast_mode)
         self.anonymizer, self.anonymizer_meta = load_checkpoint(anonymizer_checkpoint, device=self.device)
         self.expression_model, self.expression_meta = load_checkpoint(expression_checkpoint, device=self.device)
+        self.machine_privacy = dict(self.expression_meta.get('metrics', {}).get('machine_privacy', {}))
         if self.anonymizer_meta.get("kind") != "anonymizer":
             raise ValueError("anonymizer_checkpoint 不是匿名化模型检查点")
         # Only checkpoints trained with the explicit identity-margin loss are
@@ -46,6 +56,8 @@ class ExpressionDeidentifier:
         )
         if self.expression_meta.get("kind") != "expression":
             raise ValueError("expression_checkpoint 不是表情模型检查点")
+        if self.expression_model.classifier.out_features != len(EXPRESSION_NAMES):
+            raise ValueError('运行时表情检查点必须使用项目定义的七类标签')
         # RAF is more stable on neutral webcam faces while the joint model is
         # stronger on the KMU cabin domain. Average their calibrated
         # probabilities when companion checkpoints are available.
@@ -66,6 +78,7 @@ class ExpressionDeidentifier:
             # latency and memory; offline/evaluation mode stays FP32.
             for model, _metadata in self.expression_models:
                 model.half()
+            self.anonymizer.half()
         self.identity_model = None
         self.identity_meta = None
         if identity_checkpoint:
@@ -90,7 +103,10 @@ class ExpressionDeidentifier:
                 sface_path = ROOT / "models" / "face_recognition_sface_2021dec.onnx"
                 if sface_path.is_file():
                     self.sface_model = cv2.FaceRecognizerSF_create(str(sface_path), "")
-            except (ImportError, OSError, AttributeError, RuntimeError):
+                else:
+                    self.diagnostic_errors.append(f'SFace 权重不存在: {sface_path}')
+            except Exception as exc:
+                self.diagnostic_errors.append(f'SFace 加载失败: {exc}')
                 self.sface_model = None
         self.identity_gallery = None
         self.identity_gallery_size = max(1, int(identity_gallery_size))
@@ -103,8 +119,11 @@ class ExpressionDeidentifier:
                         gallery_root, self.sface_model,
                         max_identities=self.identity_gallery_size,
                     )
-                except (OSError, ValueError, RuntimeError):
+                except (OSError, ValueError, RuntimeError) as exc:
+                    self.diagnostic_errors.append(f'身份图库加载失败: {exc}')
                     self.identity_gallery = None
+            else:
+                self.diagnostic_errors.append(f'身份图库目录不存在: {gallery_root}')
         self.stats = load_stats()
         self.auto_align = bool(auto_align)
         self.detector = None
@@ -166,15 +185,21 @@ class ExpressionDeidentifier:
         to enter the expression classifier before anonymization.
         """
         bank = {}
+        self.component_source_paths = []
         if (KMU_ALIGNED_DIR / "manifest.jsonl").exists():
             try:
-                for path, label, _record in iter_kmu_aligned(KMU_ALIGNED_DIR, include_review=False):
+                from expression_deid.data import split_kmu_sequence_tails
+                items = list(iter_kmu_aligned(KMU_ALIGNED_DIR, include_review=False))
+                train, _valid = split_kmu_sequence_tails(items)
+                for index in train:
+                    path, label, _record = items[index]
                     if label < 0:
                         continue
                     person = int(_record["person"])
                     with Image.open(path) as handle:
                         gray = np.asarray(handle.convert("L").resize((100, 100), Image.Resampling.BILINEAR), dtype=np.float32) / 255.0
                     bank.setdefault(int(label), {}).setdefault(person, []).append(gray)
+                    self.component_source_paths.append(path)
             except (OSError, ValueError, KeyError, TypeError):
                 pass
         # KMU has no neutral class. Add a bounded RAF neutral donor pool as a
@@ -185,6 +210,7 @@ class ExpressionDeidentifier:
                 with Image.open(path) as handle:
                     gray = np.asarray(handle.convert("L").resize((100, 100), Image.Resampling.BILINEAR), dtype=np.float32) / 255.0
                 bank.setdefault(6, {}).setdefault(-(index + 1), []).append(gray)
+                self.component_source_paths.append(path)
         except (OSError, ValueError, KeyError, TypeError):
             pass
         return bank
@@ -269,10 +295,21 @@ class ExpressionDeidentifier:
         """Pick one aligned donor by feature appearance, never by expression label."""
         if not self.component_bank:
             return None
-        source = np.asarray(source, dtype=np.float32)
+        source_array = np.asarray(source)
+        source = source_array.astype(np.float32)
+        if source_array.dtype.kind == 'f' and source.max() <= 1.0 and source.min() >= 0:
+            source = np.rint(source * 255.0)
         source_vector = self._component_descriptor(source)
         excluded = None if identity_label is None else int(identity_label) + 1
-        scores = np.mean(np.abs(self.component_vectors - source_vector[None, :]), axis=1)
+        if getattr(self, 'device', None) is not None and self.device.type == 'cuda':
+            torch, _, _ = require_torch()
+            if not hasattr(self, '_component_vectors_cuda'):
+                self._component_vectors_cuda = torch.from_numpy(self.component_vectors).to(self.device)
+            query = torch.from_numpy(source_vector).to(self.device)
+            with torch.inference_mode():
+                scores = (self._component_vectors_cuda-query[None]).abs().mean(1).cpu().numpy()
+        else:
+            scores = np.mean(np.abs(self.component_vectors - source_vector[None, :]), axis=1)
         valid = np.ones(len(self.component_bank), dtype=bool)
         if excluded is not None:
             valid &= self.component_people != excluded
@@ -306,7 +343,7 @@ class ExpressionDeidentifier:
         if donor is None:
             donor = self._select_component_donor(source, identity_label=identity_label)
         if donor is None:
-            return np.clip(np.rint(source * 255.0), 0, 255).astype(np.uint8)
+            raise AnonymizationUnavailable('缺少局部匿名化参考资源；不能把原脸当作匿名结果')
         output = source.copy()
         # The eye and mouth geometry is expression-critical.  The donor is
         # used more strongly for texture than for its low-frequency shape.
@@ -384,20 +421,18 @@ class ExpressionDeidentifier:
         output = source * (1.0 - generated_strength * inner_mask) + generated * (generated_strength * inner_mask)
         return np.clip(np.rint(output), 0, 255).astype(np.uint8)
 
-    def _composite_component_edit(self, raw_gray, output, face, matrix, *, mask_mode="features"):
-        """Composite a local aligned edit back into a raw grayscale frame."""
+    @classmethod
+    @lru_cache(maxsize=3)
+    def _composite_mask(cls, mask_mode):
+        """Immutable aligned mask shared across video frames."""
         from PIL import ImageDraw, ImageFilter
-        height, width = raw_gray.shape
-        edited256 = np.asarray(
-            Image.fromarray(output, mode="L").resize((256, 256), Image.Resampling.BILINEAR)
-        )
         feature_mask = np.zeros((100, 100), dtype=np.float32)
         if mask_mode == "features":
-            for mask, _box in self._feature_masks(100):
+            for mask, _box in cls._feature_masks(100):
                 feature_mask = np.maximum(feature_mask, mask)
-        elif mask_mode == "face":
+        elif mask_mode in ("face", "conceal"):
             face_shape = Image.new("L", (100, 100), 0)
-            ImageDraw.Draw(face_shape).ellipse((16, 13, 84, 96), fill=235)
+            ImageDraw.Draw(face_shape).ellipse((16, 13, 84, 96), fill=255 if mask_mode == "conceal" else 235)
             feature_mask = np.asarray(face_shape, dtype=np.float32) / 255.0
         else:
             raise ValueError(f"未知的合成掩膜模式: {mask_mode}")
@@ -407,33 +442,51 @@ class ExpressionDeidentifier:
             .filter(ImageFilter.GaussianBlur(2.0)),
             dtype=np.float32,
         ) / 255.0
-        face_mask = Image.fromarray(
+        return Image.fromarray(
             np.clip(feature_mask * 255.0, 0, 255).astype(np.uint8), mode="L"
         )
+
+    @classmethod
+    @lru_cache(maxsize=16)
+    def _warped_composite_mask(cls, mask_mode, roi_size, affine):
+        # Alignment is reused between detector passes. Cache geometry only;
+        # source or anonymous face pixels never live in this global cache.
+        alpha = np.asarray(cls._composite_mask(mask_mode).transform(
+            roi_size, Image.Transform.AFFINE, affine,
+            resample=Image.Resampling.BILINEAR, fillcolor=0,
+        ), dtype=np.float32) / 255.0
+        alpha.setflags(write=False)
+        return alpha
+
+    def _composite_component_edit(self, raw_gray, output, face, matrix, *, mask_mode="features"):
+        """Edit only the face rectangle, preserving the surrounding pixels exactly."""
+        height, width = raw_gray.shape
+        x, y, box_w, box_h = [int(round(float(v))) for v in face[:4]]
+        x0, y0 = max(0, x), max(0, y)
+        x1, y1 = min(width, x + box_w), min(height, y + box_h)
+        result = raw_gray.copy()
+        if x1 <= x0 or y1 <= y0:
+            return result
+        edited256 = Image.fromarray(output, mode="L").resize((256, 256), Image.Resampling.BILINEAR)
         # PIL samples the input (aligned template) at each output (raw-frame)
         # pixel.  The aligned-to-raw compositing therefore uses the forward
         # raw->template similarity matrix; warp_gray uses its inverse in the
         # opposite direction.
-        affine = tuple(float(v) for v in matrix.reshape(-1))
+        local_matrix = np.asarray(matrix, dtype=np.float64).copy()
+        local_matrix[:, 2] += local_matrix[:, :2] @ np.array([x0, y0])
+        affine = tuple(float(v) for v in local_matrix.reshape(-1))
+        roi_size = (x1 - x0, y1 - y0)
         edited_frame = np.asarray(
-            Image.fromarray(edited256, mode="L").transform(
-                (width, height), Image.Transform.AFFINE, affine,
+            edited256.transform(
+                roi_size, Image.Transform.AFFINE, affine,
                 resample=Image.Resampling.BILINEAR, fillcolor=0,
             ), dtype=np.float32,
         )
-        alpha = np.asarray(
-            face_mask.transform(
-                (width, height), Image.Transform.AFFINE, affine,
-                resample=Image.Resampling.BILINEAR, fillcolor=0,
-            ), dtype=np.float32,
-        ) / 255.0
-        x, y, box_w, box_h = [int(round(float(v))) for v in face[:4]]
-        rect = np.zeros((height, width), dtype=np.float32)
-        rect[max(0, y):min(height, y + box_h), max(0, x):min(width, x + box_w)] = 1.0
-        alpha *= rect
-        base_gray = np.asarray(Image.fromarray(raw_gray, mode="L"), dtype=np.float32)
-        result = base_gray * (1.0 - alpha) + edited_frame * alpha
-        return np.clip(np.rint(result), 0, 255).astype(np.uint8)
+        alpha = self._warped_composite_mask(mask_mode, roi_size, affine)
+        base_gray = raw_gray[y0:y1, x0:x1].astype(np.float32)
+        edited_roi = base_gray * (1.0 - alpha) + edited_frame * alpha
+        result[y0:y1, x0:x1] = np.clip(np.rint(edited_roi), 0, 255).astype(np.uint8)
+        return result
 
     @staticmethod
     def _image_gray(image) -> np.ndarray:
@@ -571,12 +624,13 @@ class ExpressionDeidentifier:
     def _machine_runtime_candidate(self, aligned_gray, variant=3):
         """Fast machine-private candidate without per-frame SFace screening."""
         if self.ganonymization_backend is None:
-            return self._learned_component_edit(
+            candidate = self._learned_component_edit(
                 self._component_anonymize(
                     self._resize(aligned_gray),
                     donor_override=getattr(self, "_runtime_donor", None),
                 )
             )
+            return self._machine_local_privacy(candidate, self.machine_privacy)
         backend_geometry = float(self.ganonymization_backend.geometry_strength)
         backend_profile = int(self.ganonymization_backend.geometry_profile)
         source_generated = float(self.generated_strength)
@@ -590,6 +644,56 @@ class ExpressionDeidentifier:
             self.ganonymization_backend.geometry_strength = backend_geometry
             self.ganonymization_backend.geometry_profile = backend_profile
             self.generated_strength = source_generated
+
+    @classmethod
+    def _machine_local_privacy(cls, image, profile):
+        """Bounded local feature edits; no expression label or donor image.
+
+        A classifier checkpoint records the exact anonymous training domain.
+        Existing checkpoints use an empty profile and retain their old input.
+        """
+        if not profile: return np.asarray(image, dtype=np.uint8)
+        limits = {'eye_scale':(.2,2), 'nose_scale':(.2,3), 'mouth_scale':(.2,2),
+                  'eye_shift':(-12,12), 'texture':(0,40), 'blur':(0,3)}
+        for name, bounds in limits.items():
+            if name in profile:
+                value = float(profile[name])
+                if not np.isfinite(value) or not bounds[0] <= value <= bounds[1]:
+                    raise ValueError(f'局部匿名化参数 {name} 超出范围 {bounds}')
+        if profile.get('mask_mode','features') not in ('features','face'):
+            raise ValueError('局部匿名化 mask_mode 必须为 features 或 face')
+        import cv2
+        image = cls._resize(np.asarray(image, dtype=np.uint8))
+        yy, xx = np.mgrid[:100, :100].astype(np.float32)
+        map_x = xx.copy()
+        map_y = yy.copy()
+        eye_scale = float(profile.get('eye_scale', 1))
+        shift = float(profile.get('eye_shift', 0))
+        nose_scale = float(profile.get('nose_scale', 1))
+        mouth_scale = float(profile.get('mouth_scale', 1))
+        if min(eye_scale, nose_scale, mouth_scale) < .2:
+            raise ValueError('局部身份变形比例必须至少为 0.2')
+        for cx, cy, rx, ry, scale, offset in (
+            (25.75, 32.97, 22, 22, eye_scale, -shift),
+            (69.23, 31.91, 22, 22, eye_scale, shift),
+            (49.07, 54.86, 17, 18, nose_scale, 0),
+            (49, 71, 28, 15, mouth_scale, 0),
+        ):
+            weight = np.clip((1-((xx-cx-offset)/rx)**2-((yy-cy)/ry)**2)*3, 0, 1)
+            mapped = cx + (xx-cx-offset)/scale
+            map_x = map_x*(1-weight)+mapped*weight
+            if profile.get('ratio_preserving') and cy != 54.86:
+                # Scale eye and lip apertures with their widths instead of
+                # making a narrowed eye look unnaturally wide open.
+                mapped_y = cy+(yy-cy)/scale
+                map_y = map_y*(1-weight)+mapped_y*weight
+        edited = cv2.remap(image, map_x, map_y, cv2.INTER_LINEAR, borderMode=cv2.BORDER_REFLECT_101).astype(np.float32)
+        blur = float(profile.get('blur', 0))
+        if blur > 0: edited = cv2.GaussianBlur(edited, (0, 0), blur)
+        texture = float(profile.get('texture', 0))
+        if texture:
+            edited += texture * (np.sin(xx*.27+yy*.13) + np.cos(xx*.15-yy*.22)) / 2
+        return np.clip(np.rint(edited), 0, 255).astype(np.uint8)
 
     def select_anonymized_candidate(self, aligned_gray, reference_gray=None):
         """Generate local anonymized candidates and keep the least similar face.
@@ -671,7 +775,7 @@ class ExpressionDeidentifier:
     def anonymize(self, image, *, expression_label=None, identity_label=None,
                   aligned=None, selection_reference=None, purpose="display"):
         raw_gray = self._image_gray(image)
-        is_raw = aligned is not True and self.auto_align and raw_gray.shape not in {(100, 100), (256, 256)}
+        is_raw = aligned is False or (aligned is None and self.auto_align and raw_gray.shape not in {(100, 100), (256, 256)})
         matrix = None
         original_rgb = None
         face = None
@@ -690,11 +794,15 @@ class ExpressionDeidentifier:
             gray = self._resize(aligned256)
             matrix = similarity_matrix(landmarks, template_for(256))
         else:
-            gray = self._prepare_gray(image, aligned=aligned)
-            aligned256 = np.asarray(gray, dtype=np.uint8)
-            landmarks = None
+            if raw_gray.shape[0] != raw_gray.shape[1]:
+                raise ValueError('显式对齐人脸必须是正方形；原始画面请启用自动检测')
+            landmarks = template_for(raw_gray.shape[0])
+            aligned256 = warp_gray(raw_gray, landmarks)[0]
+            gray = self._resize(aligned256)
+            face = np.array((0,0,raw_gray.shape[1],raw_gray.shape[0]))
+            matrix = similarity_matrix(landmarks, template_for(256))
         self._last_source_aligned256 = np.asarray(aligned256, dtype=np.uint8)
-        self._last_raw_gray = np.asarray(raw_gray, dtype=np.uint8) if is_raw else None
+        self._last_raw_gray = np.asarray(raw_gray, dtype=np.uint8)
         self._last_face = face
         self._last_matrix = matrix
         self._last_landmarks = landmarks
@@ -719,9 +827,7 @@ class ExpressionDeidentifier:
         elif purpose == "machine":
             # Realtime fallback: local component edit plus learned residual.
             # It does not copy a donor face or use an expression label.
-            output = self._learned_component_edit(
-                self._component_anonymize(gray, identity_label=identity_label)
-            )
+            output = self._machine_runtime_candidate(aligned256)
         elif self.ganonymization_backend is not None:
             output = self.select_anonymized_candidate(
                 aligned256 if is_raw else raw_gray,
@@ -734,13 +840,11 @@ class ExpressionDeidentifier:
         # Keep the aligned anonymized face for process(); this avoids running
         # the detector a second time on the already anonymized raw frame.
         self._last_anonymized_aligned = np.asarray(output, dtype=np.uint8)
-        if not is_raw:
-            return output
         # Only the selected inner-face mask is composited back; hair and
         # background remain exact copies of the grayscale source frame.
         composited = self._composite_component_edit(
             raw_gray, output, face, matrix,
-            mask_mode="face" if self.ganonymization_backend is not None else "features",
+            mask_mode="face" if self.ganonymization_backend is not None else self.machine_privacy.get('mask_mode', 'features') if purpose == 'machine' else 'features',
         )
         # The classifier must see the pixels actually displayed after pasting
         # the edits into the video, including boundary blending/resampling.
@@ -753,9 +857,6 @@ class ExpressionDeidentifier:
         if self._last_source_aligned256 is None:
             raise RuntimeError("没有可用于显示匿名化的源脸")
         aligned = self._human_facing_candidate(self._last_source_aligned256)
-        if not self._last_was_raw:
-            self._last_display_aligned = np.asarray(aligned, dtype=np.uint8)
-            return self._last_display_aligned
         displayed = self._composite_component_edit(
             self._last_raw_gray, aligned, self._last_face, self._last_matrix,
             mask_mode="face" if self.ganonymization_backend is not None else "features",
@@ -787,7 +888,7 @@ class ExpressionDeidentifier:
         available for the image comparison and offline evaluation paths.
         """
         raw_input = self._image_rgb(image)
-        was_raw = aligned is not True and self.auto_align and tuple(raw_input.shape[:2]) not in {(100, 100), (256, 256)}
+        was_raw = aligned is False or (aligned is None and self.auto_align and tuple(raw_input.shape[:2]) not in {(100, 100), (256, 256)})
         identity_original = None
         identity_face = None
         if diagnostics and self.identity_model is not None:
@@ -801,7 +902,6 @@ class ExpressionDeidentifier:
         # the internal privacy diagnostic.  It never sees the display output.
         machine_anonymized = self.anonymize(
             image,
-            identity_label=identity_original["label"] if identity_original else None,
             aligned=aligned,
             selection_reference=identity_face,
             purpose="machine",
@@ -834,10 +934,14 @@ class ExpressionDeidentifier:
             "prototype_strength": self.prototype_strength,
             "face_only_edit": True,
             "component_edit": True,
-            "background_preserved": bool(was_raw),
+            "background_preserved": True,
             "anonymized": anonymized,
             "privacy_selection": dict(self._last_privacy_selection),
             "learned_anonymizer": bool(self.learned_anonymizer_enabled),
+            "identity_diagnostics_available": self.identity_model is not None,
+            "sface_diagnostics_available": self.sface_model is not None,
+            "gallery_diagnostics_available": self.identity_gallery is not None,
+            "diagnostic_errors": list(self.diagnostic_errors),
         }
         if identity_original is not None:
             identity_anonymized = self.predict_identity(expression_input, aligned=True)
@@ -943,6 +1047,12 @@ class ExpressionDeidentifier:
     def _inference_mode(self):
         torch, _, _ = require_torch()
         return torch.inference_mode()
+
+    def close(self):
+        """Release native landmark tasks when a desktop worker ends."""
+        if self.ganonymization_backend is not None:
+            self.ganonymization_backend.close()
+            self.ganonymization_backend = None
 
     @staticmethod
     def _softmax(logits):

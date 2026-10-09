@@ -1,0 +1,9 @@
+{
+  "eye_scale": 0.4,
+  "eye_shift": 7,
+  "nose_scale": 1.7,
+  "mouth_scale": 0.6,
+  "texture": 14,
+  "blur": 0.7,
+  "mask_mode": "features"
+}

@@ -10,6 +10,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+import numpy as np
+
 
 def require_torch():
     try:
@@ -170,7 +172,7 @@ def checkpoint_payload(model, *, kind: str, epoch: int = 0, metrics: dict[str, A
         "metrics": metrics or {},
         "model_config": _model_config(model, kind),
         "state_dict": model.state_dict(),
-        "torch_version": torch.__version__,
+        "torch_version": str(torch.__version__),
     }
 
 
@@ -192,10 +194,15 @@ def save_checkpoint(model, path, *, kind: str, epoch: int = 0, metrics: dict[str
 def load_checkpoint(path, *, device="cpu"):
     """Load a checkpoint and construct the correct model from its metadata."""
     torch, _, _ = require_torch()
-    try:
-        payload = torch.load(Path(path), map_location=device, weights_only=False)
-    except TypeError:  # PyTorch < 2.6
-        payload = torch.load(Path(path), map_location=device)
+    # Older local checkpoints stored TorchVersion (a str subclass). Allow that
+    # type explicitly while retaining the restricted weights-only loader.
+    with torch.serialization.safe_globals([torch.torch_version.TorchVersion]):
+        payload = torch.load(Path(path), map_location=device, weights_only=True)
+    if not isinstance(payload, dict) or not isinstance(payload.get('state_dict'), dict):
+        raise ValueError('模型检查点缺少 state_dict 字典')
+    if any(not isinstance(value, torch.Tensor) or not torch.isfinite(value).all().item()
+           for value in payload['state_dict'].values()):
+        raise ValueError('模型检查点包含无效或非有限权重')
     kind = payload.get("kind") or payload.get("model_config", {}).get("kind")
     config = payload.get("model_config", {})
     if kind == "expression":

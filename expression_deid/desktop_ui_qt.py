@@ -11,12 +11,13 @@ from __future__ import annotations
 import argparse
 import json
 import time
+import threading
 from collections import deque
 from pathlib import Path
 
 import cv2
 import numpy as np
-from PySide6.QtCore import QObject, QPoint, QRect, QSize, Qt, QThread, Signal, Slot
+from PySide6.QtCore import QObject, QPoint, QRect, QSize, Qt, QThread, QTimer, Signal, Slot
 from PySide6.QtGui import QColor, QFont, QImage, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QApplication, QComboBox, QFrame, QGridLayout, QHBoxLayout, QLabel,
@@ -78,7 +79,7 @@ def samples() -> list[dict]:
         record = json.loads(line)
         label = int(record.get("label", -1))
         path = (KMU_ALIGNED_DIR / str(record.get("output", ""))).resolve()
-        if label not in result and path.is_file() and path.is_relative_to(KMU_ALIGNED_DIR.resolve()):
+        if record.get('status') == 'ok' and 0 <= label < 7 and label not in result and path.is_file() and path.is_relative_to(KMU_ALIGNED_DIR.resolve()):
             result[label] = {"label": label, "expression": record.get("expression", str(label)), "path": path, "source": record.get("source", path.name), "person": record.get("person", "")}
     return [result[key] for key in sorted(result)]
 
@@ -103,7 +104,7 @@ def diagnostic_pipeline(device: str) -> ExpressionDeidentifier:
         fast_mode=True,
         privacy_selection=False,
         identity_gallery_size=1680,
-        ganonymization_checkpoint=gan_checkpoint if gan_checkpoint.is_file() else None,
+        ganonymization_checkpoint=gan_checkpoint if gan_checkpoint.is_file() and gan_repo.is_dir() else None,
         ganonymization_repo=gan_repo if gan_repo.is_dir() else None,
     )
 
@@ -132,15 +133,20 @@ class ExperimentWorker(QThread):
         super().__init__(); self.items = items; self.device = device
 
     def run(self):
+        pipeline = None
         try:
+            if self.isInterruptionRequested(): return
             pipeline = diagnostic_pipeline(self.device)
             for index, item in enumerate(self.items, start=1):
+                if self.isInterruptionRequested(): return
                 started = time.perf_counter()
                 result = pipeline.process(item["path"], aligned=True, diagnostics=True)
                 self.result_ready.emit({"item": item, "result": result}, index, len(self.items), time.perf_counter() - started)
             self.finished_all.emit(len(self.items))
         except Exception as exc:  # pragma: no cover - dependent on local model files
             self.error.emit(str(exc))
+        finally:
+            if pipeline is not None: pipeline.close()
 
 
 class ExperimentPage(QWidget):
@@ -195,19 +201,26 @@ class ExperimentPage(QWidget):
     def _start(self, items):
         if self.worker and self.worker.isRunning(): return
         self.run_button.setEnabled(False); self.exp_status.setText("正在加载身份诊断模型…")
-        self.worker = ExperimentWorker(items, self.device); self.worker.result_ready.connect(self._show_result); self.worker.error.connect(self._error); self.worker.finished_all.connect(self._finished); self.worker.start()
+        self.worker = ExperimentWorker(items, self.device); self.worker.result_ready.connect(self._show_result); self.worker.error.connect(self._error); self.worker.finished_all.connect(self._finished)
+        self.worker.finished.connect(lambda: self.run_button.setEnabled(True))
+        self.worker.start()
 
     @Slot(object, int, int, float)
     def _show_result(self, payload, index, total, elapsed):
         item, result = payload["item"], payload["result"]
         set_image(self.original_view[1], np.asarray(_image_frame(item["path"])), max_size=self.original_view[1].size())
         set_image(self.anonymized_view[1], result["anonymized"], max_size=self.anonymized_view[1].size())
-        exp = result.get("expression_anonymized", {}); changed = result.get("identity_prediction_changed", False)
-        self.metric_line.setText(f"标签 {item['expression']}  →  {exp.get('name_zh', exp.get('name', '—'))}     ·     匿名图置信度 {float(exp.get('confidence', 0)) * 100:.1f}%     ·     ID {'已改变' if changed else '未改变'}")
-        self.detail_line.setText(f"SFace {float(result.get('sface_cosine', 0)):.3f}     ·     1681 人库原身份命中：{'是' if result.get('gallery_match_original') else '否'}     ·     本张 {elapsed * 1000:.0f} ms     ·     {index}/{total}")
+        exp = result.get("expression_anonymized", {}); changed = result.get("identity_prediction_changed")
+        identity_text = '未验证' if changed is None else '已改变' if changed else '未改变'
+        gallery = result.get('gallery_match_original')
+        gallery_text = '未验证' if gallery is None else '是' if gallery else '否'
+        self.metric_line.setText(f"标签 {item['expression']}  →  {exp.get('name_zh', exp.get('name', '—'))}     ·     匿名图置信度 {_metric_value(exp.get('confidence'), percent=True)}     ·     ID {identity_text}")
+        self.detail_line.setText(f"SFace {_metric_value(result.get('sface_cosine'), decimals=3)}     ·     {result.get('gallery_size', '—')} 人库原身份命中：{gallery_text}     ·     本张 {elapsed * 1000:.0f} ms     ·     {index}/{total}")
         self.exp_status.setText(f"已完成 {index}/{total} 张样本")
 
-    def _error(self, message): self.exp_status.setText(f"实验失败：{message}")
+    def _error(self, message):
+        self.run_button.setEnabled(True)
+        self.exp_status.setText(f"实验失败：{message}")
     def _finished(self, count): self.run_button.setEnabled(True); self.exp_status.setText(f"完成 {count} 张样本的身份诊断")
 
 
@@ -218,11 +231,13 @@ class VideoWorker(QThread):
 
     def __init__(self, source, device: str):
         super().__init__(); self.source = source; self.device = device; self.running = True
+        self.frame_pending = threading.Event()
 
     def stop(self): self.running = False
 
     def run(self):
         capture = None
+        pipeline = display_pipeline = None
         try:
             # Match the web visual output while keeping the realtime analysis
             # path responsive: the classifier pipeline stays on the fast local
@@ -230,7 +245,9 @@ class VideoWorker(QThread):
             # display only.  FastVideoRunner never sends that display branch to
             # the expression classifier.
             pipeline = build_pipeline(self.device, use_gan=False)
+            if not self.running: return
             display_pipeline = build_pipeline(self.device, use_gan=True)
+            if not self.running: return
             runner = FastVideoRunner(
                 pipeline,
                 detect_interval=5,
@@ -239,25 +256,37 @@ class VideoWorker(QThread):
             )
             kind, value = self.source; capture = cv2.VideoCapture(int(value), cv2.CAP_DSHOW) if kind == "camera" else cv2.VideoCapture(str(value))
             if not capture.isOpened(): raise RuntimeError("无法打开摄像头或视频文件")
+            source_fps = capture.get(cv2.CAP_PROP_FPS)
+            if not np.isfinite(source_fps) or source_fps <= 0:
+                source_fps = 30.0
             ticks = deque(maxlen=24); index = 0
             while self.running:
                 ok, bgr = capture.read()
                 if not ok: break
                 rgb = _resize_rgb(cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB), 960)
-                anonymized, info = runner.process_frame(rgb, index)
-                ticks.append(time.perf_counter())
-                fps = (len(ticks) - 1) / max(1e-6, ticks[-1] - ticks[0]) if len(ticks) > 1 else 0.0
-                label = info.get("expression_zh", info.get("expression", "未检测到人脸")); confidence = float(info.get("confidence") or 0.0)
-                self.frame_ready.emit(qimage_from_array(pipeline._image_gray(rgb)), qimage_from_array(anonymized), label, confidence, fps, index); index += 1
+                timestamp = index / source_fps if kind != "camera" else time.monotonic()
+                analysis_started = time.perf_counter()
+                anonymized, info = runner.process_frame(rgb, index, timestamp=timestamp)
+                ticks.append((time.perf_counter() - analysis_started, info.get('status') == 'ok'))
+                fps = sum(done for _, done in ticks) / max(1e-6, sum(duration for duration, _ in ticks))
+                label = info.get("expression_zh") or info.get("expression") or "未检测到人脸"
+                confidence = float(info["confidence"]) if info.get("confidence") is not None else float("nan")
+                if not self.frame_pending.is_set():
+                    self.frame_pending.set()
+                    self.frame_ready.emit(qimage_from_array(pipeline._image_gray(rgb)), qimage_from_array(anonymized), label, confidence, fps, index)
+                index += 1
             self.ended.emit()
         except Exception as exc: self.worker_error.emit(str(exc))
         finally:
             if capture is not None: capture.release()
+            if display_pipeline is not None: display_pipeline.close()
+            if pipeline is not None: pipeline.close()
 
 
 class VideoPage(QWidget):
     def __init__(self, device: str):
-        super().__init__(); self.device = device; self.worker = None; self._build()
+        super().__init__(); self.device = device; self.worker = None
+        self.pending_source = None; self.accept_frames = False; self._build()
 
     def _build(self):
         root = QVBoxLayout(self); root.setContentsMargins(28, 24, 28, 24); root.setSpacing(16)
@@ -267,13 +296,40 @@ class VideoPage(QWidget):
         self.stop_button = QPushButton("停止"); self.stop_button.clicked.connect(self.stop); head.addWidget(self.stop_button); root.addLayout(head)
         bar = QHBoxLayout(); bar.addWidget(QLabel("示例视频", objectName="panelNote")); self.examples = QComboBox(); self.examples.addItems([path.name for path in sorted((ROOT / "outputs").glob("example*.mp4"))]); bar.addWidget(self.examples); play = QPushButton("播放示例"); play.clicked.connect(self.play_example); bar.addWidget(play); bar.addStretch(); self.source_label = QLabel("未选择来源"); self.source_label.setObjectName("panelNote"); bar.addWidget(self.source_label); root.addLayout(bar)
         media = QHBoxLayout(); media.setSpacing(16); self.original = self._media_card("ORIGINAL VIDEO", "等待输入", False); self.anonymized = self._media_card("ANONYMIZED VIDEO", "等待推理", True); media.addWidget(self.original[0], 1); media.addWidget(self.anonymized[0], 1); root.addLayout(media, 1)
-        metrics = QHBoxLayout(); self.expression = MetricCard("当前表情", "—", "匿名图预测"); self.confidence = MetricCard("置信度", "—", "校准后验"); self.fps = MetricCard("真实分析帧率", "—", "匿名化 + 识别"); self.status = QLabel("等待视频"); self.status.setObjectName("statusChip"); metrics.addWidget(self.expression); metrics.addWidget(self.confidence); metrics.addWidget(self.fps); metrics.addWidget(self.status); root.addLayout(metrics)
+        metrics = QHBoxLayout(); self.expression = MetricCard("当前表情", "—", "匿名图预测"); self.confidence = MetricCard("置信度", "—", "连续帧概率"); self.fps = MetricCard("真实分析帧率", "—", "匿名化 + 识别"); self.status = QLabel("等待视频"); self.status.setObjectName("statusChip"); metrics.addWidget(self.expression); metrics.addWidget(self.confidence); metrics.addWidget(self.fps); metrics.addWidget(self.status); root.addLayout(metrics)
 
     def _media_card(self, heading, empty, accent):
         frame = QFrame(); frame.setProperty("mediaCard", True); layout = QVBoxLayout(frame); layout.setContentsMargins(12, 12, 12, 12); top = QHBoxLayout(); top.addWidget(QLabel(heading, objectName="mediaHeading")); top.addStretch(); top.addWidget(QLabel("FACE-ONLY" if accent else "SOURCE", objectName="mediaTag")); layout.addLayout(top); image = QLabel(empty); image.setObjectName("videoImage"); image.setAlignment(Qt.AlignCenter); image.setMinimumSize(430, 300); image.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding); layout.addWidget(image, 1); return frame, image
 
     def _start(self, source, text):
-        self.stop(); self.source_label.setText(text); self.status.setText("正在加载 GPU 模型…"); self.worker = VideoWorker(source, self.device); self.worker.frame_ready.connect(self._frame); self.worker.worker_error.connect(self._error); self.worker.ended.connect(lambda: self.status.setText("视频结束")); self.worker.start()
+        self.pending_source = (source, text)
+        if self.worker is not None:
+            self.accept_frames = False
+            self.worker.stop()
+            self.status.setText('正在停止上一段分析…')
+            return
+        self.pending_source = None
+        self.source_label.setText(text); self.status.setText("正在加载分析模型…")
+        self.worker = VideoWorker(source, self.device); self.worker.setParent(self)
+        self.accept_frames = True
+        self.worker.frame_ready.connect(self._frame); self.worker.worker_error.connect(self._error)
+        self.worker.ended.connect(self._ended); self.worker.finished.connect(self._worker_finished)
+        self.worker.start()
+
+    def _ended(self):
+        if self.sender() is self.worker and self.accept_frames:
+            self.status.setText('视频结束')
+
+    def _worker_finished(self):
+        worker = self.sender()
+        if worker is not self.worker: return
+        self.worker = None
+        worker.deleteLater()
+        pending, self.pending_source = self.pending_source, None
+        if pending is not None:
+            self._start(*pending)
+        elif not self.accept_frames:
+            self.status.setText('已停止')
 
     def start_camera(self): self._start(("camera", 0), "本机摄像头")
     def choose_video(self):
@@ -282,16 +338,31 @@ class VideoPage(QWidget):
     def play_example(self):
         if self.examples.currentText(): self._start(("video", str(ROOT / "outputs" / self.examples.currentText())), f"示例视频 · {self.examples.currentText()}")
     def stop(self):
-        if self.worker and self.worker.isRunning(): self.worker.stop(); self.worker.wait(1200)
-        self.worker = None; self.status.setText("已停止")
+        self.pending_source = None; self.accept_frames = False
+        if self.worker is not None:
+            self.worker.stop()
+            self.status.setText('正在停止…')
+        else:
+            self.status.setText("已停止")
 
     @Slot(object, object, str, float, float, int)
     def _frame(self, original, anonymized, expression, confidence, fps, index):
+        sender = self.sender()
+        if sender is not None:
+            sender.frame_pending.clear()
+            if sender is not self.worker or not self.accept_frames: return
         for image, label in ((original, self.original[1]), (anonymized, self.anonymized[1])):
             pixmap = QPixmap.fromImage(image); pixmap = pixmap.scaled(label.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation); label.setPixmap(pixmap); label.setText("")
-        self.expression.set_value(expression); self.confidence.set_value(f"{confidence * 100:.1f}%"); self.fps.set_value(f"{fps:.1f} FPS"); self.status.setText("运行中 · 仅匿名图进入表情模型")
+        self.expression.set_value(expression); self.confidence.set_value(f"{confidence * 100:.1f}%" if np.isfinite(confidence) else "—"); self.fps.set_value(f"{fps:.1f} FPS"); self.status.setText("运行中 · 仅匿名图进入表情模型")
 
-    def _error(self, message): self.status.setText(f"分析失败：{message}")
+    def _error(self, message):
+        if self.sender() is self.worker and self.accept_frames:
+            self.status.setText(f"分析失败：{message}")
+
+
+def _metric_value(value, *, percent=False, decimals=1):
+    if value is None or not np.isfinite(value): return '—'
+    return f'{value * 100:.1f}%' if percent else f'{value:.{decimals}f}'
 
 
 class PerformancePage(QWidget):
@@ -299,12 +370,14 @@ class PerformancePage(QWidget):
         super().__init__(); self.device = device; self._build()
 
     def _build(self):
-        root = QVBoxLayout(self); root.setContentsMargins(28, 24, 28, 24); root.setSpacing(18); root.addWidget(QLabel("整体模型表现", objectName="pageTitle")); root.addWidget(QLabel("离线联合评估 · 1100 张匿名样本 · 1681 人身份图库", objectName="pageSubtitle"))
+        root = QVBoxLayout(self); root.setContentsMargins(28, 24, 28, 24); root.setSpacing(18); root.addWidget(QLabel("整体模型表现", objectName="pageTitle")); root.addWidget(QLabel("历史离线联合评估；不代表当前实时模型的测试结果", objectName="pageSubtitle"))
         path = ROOT / "outputs/evaluation_machine_runtime_fast_strong_1681/evaluation.json"
         try: summary = json.loads(path.read_text(encoding="utf-8"))["summary"]
         except Exception: summary = {}
         cards = QGridLayout(); cards.setSpacing(12); root.addLayout(cards)
-        values = [("匿名图表情准确率", f"{summary.get('expression_anonymized_accuracy', 0) * 100:.1f}%", "表情模型只接收匿名图"), ("闭集身份准确率", f"{summary.get('identity_anonymized_accuracy', 0) * 100:.1f}%", "身份诊断"), ("1681 人库命中率", f"{summary.get('gallery_original_match_rate', 0) * 100:.1f}%", "越低越好"), ("SFace 平均相似度", f"{summary.get('sface_mean_cosine', 0):.3f}", "脸部紧裁区域"), ("评估样本", str(summary.get("samples", "—")), "KMU 数据集"), ("实时设备", self.device.upper(), "支持 CUDA")]
+        values = [("匿名图表情准确率", _metric_value(summary.get('expression_anonymized_accuracy'), percent=True), "表情模型只接收匿名图"), ("闭集身份准确率", _metric_value(summary.get('identity_anonymized_accuracy'), percent=True), "身份诊断"), (f"{summary.get('gallery_size', '—')} 人库命中率", _metric_value(summary.get('gallery_original_match_rate'), percent=True), "越低越好"), ("SFace 平均相似度", _metric_value(summary.get('sface_mean_cosine'), decimals=3), "脸部紧裁区域"), ("评估样本", str(summary.get("samples", "—")), "KMU 数据集"), ("实时设备", self.device.upper(), "支持 CUDA")]
+        provenance = QLabel(f"报告来源：{path.relative_to(ROOT)}" if summary else '评估报告不可用：尚未验证')
+        provenance.setWordWrap(True); root.addWidget(provenance)
         for index, value in enumerate(values): cards.addWidget(MetricCard(*value), index // 3, index % 3)
         panel = QFrame(); panel.setProperty("panel", True); panel_layout = QVBoxLayout(panel); panel_layout.setContentsMargins(18, 16, 18, 16); panel_layout.addWidget(QLabel("各表情类别匿名后准确率", objectName="panelTitle")); table = QTableWidget(0, 3); table.setHorizontalHeaderLabels(["类别", "样本数", "准确率"]); table.horizontalHeader().setStretchLastSection(True); table.verticalHeader().setVisible(False); table.setMinimumHeight(250); table.setEditTriggers(QTableWidget.NoEditTriggers); names = ["惊讶", "恐惧", "厌恶", "高兴", "悲伤", "愤怒", "中性"]
         for key, row in sorted(summary.get("expression_anonymized_by_class", {}).items(), key=lambda item: int(item[0])):
@@ -329,14 +402,23 @@ class MainWindow(QMainWindow):
         for index, text in enumerate(("01   实验图片对照", "02   实时视频分析", "03   整体模型表现")):
             button = QPushButton(text); button.setProperty("nav", True); button.setCheckable(True); button.clicked.connect(lambda checked, i=index: self.select_page(i)); nav_layout.addWidget(button); self.nav_buttons.append(button)
         nav_layout.addStretch(); nav_layout.addWidget(QLabel("LOCAL INFERENCE", objectName="sideCaption")); nav_layout.addWidget(QLabel("匿名结果才进入表情模型", objectName="sideNote")); layout.addWidget(nav); main = QFrame(); main_layout = QVBoxLayout(main); main_layout.setContentsMargins(28, 22, 28, 22); main_layout.setSpacing(0)
-        header = QHBoxLayout(); header.addWidget(QLabel("座舱人脸去标识实验台", objectName="appTitle")); header.addStretch(); self.status = QLabel("●  CUDA / LOCAL", objectName="topStatus"); header.addWidget(self.status); main_layout.addLayout(header); main_layout.addSpacing(18); main_layout.addWidget(self.stack, 1); layout.addWidget(main, 1); self.select_page(0)
+        header = QHBoxLayout(); header.addWidget(QLabel("座舱人脸去标识实验台", objectName="appTitle")); header.addStretch(); self.status = QLabel(f"●  {device.upper()} / LOCAL", objectName="topStatus"); header.addWidget(self.status); main_layout.addLayout(header); main_layout.addSpacing(18); main_layout.addWidget(self.stack, 1); layout.addWidget(main, 1); self.select_page(0)
 
     def select_page(self, index):
         self.stack.setCurrentIndex(index)
         for i, button in enumerate(self.nav_buttons): button.setChecked(i == index)
 
     def closeEvent(self, event):
-        self.pages[1].stop(); event.accept()
+        self.pages[1].stop()
+        experiment = self.pages[0].worker
+        if experiment is not None: experiment.requestInterruption()
+        workers = (experiment, self.pages[1].worker)
+        if any(worker is not None and worker.isRunning() for worker in workers):
+            event.ignore()
+            self.status.setText('正在停止分析并释放模型…')
+            QTimer.singleShot(100, self.close)
+        else:
+            event.accept()
 
 
 STYLESHEET = f"""

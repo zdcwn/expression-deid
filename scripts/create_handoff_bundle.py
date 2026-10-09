@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import zipfile
 from datetime import datetime, timezone
@@ -33,6 +34,7 @@ DATASETS = [
 
 MODELS = [
     ("anonymizer_adversarial_v1.pt", "models/anonymizer_adversarial_v1.pt", "required", "fast machine-targeted local anonymization"),
+    ("expression_realtime_stable.pt", "models/expression_realtime_stable.pt", "required-for-current-video", "2026-10-09 audit-validated anonymous-domain and consistency fine-tuned realtime expression classifier"),
     ("expression_machine_selector_texture.pt", "models/expression_machine_selector_texture.pt", "required", "expression classifier used after anonymization"),
     ("ganonymization_50.ckpt", "models/ganonymization_50.ckpt", "required-for-visual-output", "landmark-only human-facing display anonymizer"),
     ("face_landmarker.task", "models/face_landmarker.task", "required-for-visual-output", "MediaPipe dense landmark asset"),
@@ -45,7 +47,8 @@ MODELS = [
 ]
 
 OUTPUTS = [
-    ("evaluation_machine_runtime_fast_strong_1681", "outputs/evaluation_machine_runtime_fast_strong_1681", "report", "canonical evaluation report"),
+    ("full_audit_20261008", "outputs/full_audit_20261008", "current-audit", "2026-10-08/09 audit evidence; contains experimental candidates, not all deployed"),
+    ("evaluation_machine_runtime_fast_strong_1681", "outputs/evaluation_machine_runtime_fast_strong_1681", "historical-report", "older GAN configuration; not the current realtime result"),
     ("example_kmu_expressions.mp4", "outputs/example_kmu_expressions.mp4", "example", "desktop example video"),
     ("example_anger.mp4", "outputs/example_anger.mp4", "example", "desktop example video"),
     ("example_surprise.mp4", "outputs/example_surprise.mp4", "example", "desktop example video"),
@@ -57,7 +60,9 @@ def stats(path: Path) -> dict:
     if not path.exists():
         return {"exists": False, "files": 0, "bytes": 0, "sample_files": []}
     if path.is_file():
-        return {"exists": True, "files": 1, "bytes": path.stat().st_size, "sample_files": [path.name]}
+        with path.open('rb') as handle:
+            digest = hashlib.file_digest(handle, 'sha256').hexdigest()
+        return {"exists": True, "files": 1, "bytes": path.stat().st_size, "sha256": digest, "sample_files": [path.name]}
     files = [item for item in path.rglob("*") if item.is_file()]
     return {
         "exists": True,
@@ -92,6 +97,7 @@ def write_text_manifest(path: Path, payload: dict) -> None:
                 "exists": item["exists"],
                 "files": item["files"],
                 "bytes": item["bytes"],
+                "sha256": item.get("sha256", ""),
                 "role": item["role"],
                 "description": item["description"],
                 "note": item["note"],
@@ -127,6 +133,10 @@ def main(argv: list[str] | None = None) -> int:
         readme = ROOT / "handoff" / "README.md"
         if readme.is_file():
             archive.write(readme, "README.md")
+        audit_report = ROOT / 'docs/full-audit-20261009.md'
+        if audit_report.is_file(): archive.write(audit_report, 'full-audit-20261009.md')
+        audit_result = ROOT / 'docs/audit-results-20261009.json'
+        if audit_result.is_file(): archive.write(audit_result, 'audit-results-20261009.json')
     print(json.dumps({"manifest": str(json_path), "csv": str(csv_path), "zip": str(zip_path)}, ensure_ascii=False, indent=2))
     return 0
 

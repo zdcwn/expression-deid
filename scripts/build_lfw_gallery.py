@@ -14,6 +14,8 @@ def main():
     parser.add_argument("--identities", type=int, default=1680,
                         help="身份数；LFW 当前可用上限为 1680")
     args = parser.parse_args()
+    if args.identities < 1:
+        parser.error("--identities 必须为正整数")
     root = Path(args.root)
     output = Path(args.output)
     candidates = []
@@ -32,7 +34,7 @@ def main():
     for _count, identity, source in chosen:
         target = output / f"{identity}.jpg"
         target.write_bytes(source.read_bytes())
-        records.append({"identity": identity, "path": str(target.resolve()), "source": str(source.resolve())})
+        records.append({"identity": identity, "path": target.name, "source": str(source.relative_to(root))})
     (output / "manifest.jsonl").write_text(
         "".join(json.dumps(record, ensure_ascii=False) + "\n" for record in records), encoding="utf-8"
     )

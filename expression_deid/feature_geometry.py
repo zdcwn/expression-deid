@@ -1,8 +1,8 @@
-"""Local identity proportion edits that preserve within-feature motion ratios.
+"""Local identity proportion edits that preserve vertical feature motion.
 
 The mesh is a geometric condition, never an expression-classifier input.
-Every eye/brow group and the lips use one affine transform, so eyelid and
-mouth aperture ratios and eyebrow-to-eye relationships survive the edit.
+Every eye/brow group and the lips use one affine transform. Vertical aperture
+and eyebrow heights survive; changing width changes aperture aspect ratios.
 The face boundary is anchored; hair and background are outside the warp.
 """
 from __future__ import annotations
@@ -16,6 +16,8 @@ def _indices(connections):
 
 def identity_geometry(points, connections, strength=1.0, profile=0):
     source = np.asarray(points, dtype=np.float32)
+    if source.ndim != 2 or source.shape[1] != 2 or not np.isfinite(source).all():
+        raise ValueError('密集人脸关键点必须是有限的二维坐标')
     target = source.copy()
     # Values above one deliberately exaggerate identity proportions while
     # keeping the expression-bearing vertical coordinates unchanged.  The
@@ -53,7 +55,9 @@ def identity_geometry(points, connections, strength=1.0, profile=0):
 
     def edit(ids, center, scale_x, scale_y, shift_x, shift_y):
         local = (source[ids] - center) @ basis
-        scales = 1.0 + strength * (np.array([scale_x, scale_y]) - 1.0)
+        # Extrapolating a shrink factor above strength=1 used to cross zero
+        # and mirror an eye. Keep every local transform orientation preserving.
+        scales = np.maximum(0.20, 1.0 + strength * (np.array([scale_x, scale_y]) - 1.0))
         offset = eye_distance * strength * np.array([shift_x, shift_y])
         target[ids] = (local * scales + offset) @ basis.T + center
 

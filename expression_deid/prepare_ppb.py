@@ -21,6 +21,21 @@ from expression_deid.config import ALIGN_SIZE, PPB_ALIGNED_DIR, PPB_DIR, PPB_FIT
 from expression_deid.detect import YuNet
 
 
+def _frame_count(container, stream):
+    if stream.frames: return int(stream.frames)
+    duration = (float(stream.duration * stream.time_base) if stream.duration is not None
+                else float(container.duration) / 1_000_000 if container.duration is not None else None)
+    if duration is not None:
+        count = round(duration * float(stream.average_rate or 30))
+        if count > 0: return count
+    # Local files with neither duration nor frame-count metadata can still be
+    # decoded. Count them once and rewind, rather than silently sampling frame 1.
+    count = sum(1 for _ in container.decode(stream))
+    container.seek(0)
+    if count <= 0: raise ValueError('视频中没有可解码帧')
+    return count
+
+
 def align_ppb_neutral(
     source_dir: Path = PPB_DIR / "raw-cir-neutral",
     output_dir: Path = PPB_ALIGNED_DIR,
@@ -41,18 +56,13 @@ def align_ppb_neutral(
         match = re.search(r"-P(\d+)-ND\.mp4$", path.name, re.IGNORECASE)
         person = match.group(1) if match else path.stem
         container = av.open(str(path))
-        stream = container.streams.video[0]
-        frame_count = int(stream.frames or 0)
-        if frame_count <= 0:
-            frame_count = int(round(float(stream.duration * stream.time_base))) * int(float(stream.average_rate or 30))
-        targets = np.linspace(
-            max(1, int(frame_count * 0.08)),
-            max(1, int(frame_count * 0.92)),
-            frames_per_video,
-            dtype=int,
-        )
-        target_set = set(int(x) for x in targets)
         try:
+            if not container.streams.video:
+                raise ValueError(f"输入文件没有视频流: {path}")
+            stream = container.streams.video[0]
+            frame_count = _frame_count(container, stream)
+            targets = np.linspace(int(frame_count * .08), min(frame_count-1, int(frame_count * .92)), frames_per_video, dtype=int)
+            target_set = set(int(x) for x in targets)
             for index, frame in enumerate(container.decode(stream)):
                 if index not in target_set:
                     continue
@@ -68,6 +78,7 @@ def align_ppb_neutral(
                 face, reason = select_face(faces, rgb.shape[:2])
                 if face is None:
                     record["reason"] = reason
+                    output_path.unlink(missing_ok=True)
                 else:
                     gray = np.asarray(Image.fromarray(rgb).convert("L"), dtype=np.uint8)
                     aligned, fit_error = warp_gray(gray, landmarks_of(face), ALIGN_SIZE)

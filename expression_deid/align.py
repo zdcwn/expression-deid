@@ -26,12 +26,17 @@ def similarity_matrix(src: np.ndarray, dst: np.ndarray) -> np.ndarray:
     """src 到 dst 的相似变换，2×3。不估计反射。"""
     src = np.asarray(src, dtype=np.float64)
     dst = np.asarray(dst, dtype=np.float64)
+    if (src.ndim != 2 or src.shape[1:] != (2,) or src.shape != dst.shape
+            or len(src) < 2 or not np.isfinite(src).all() or not np.isfinite(dst).all()):
+        raise ValueError('相似变换需要两组等长、有限的二维关键点')
     count = src.shape[0]
     src_mean = src.mean(axis=0)
     dst_mean = dst.mean(axis=0)
     src_delta = src - src_mean
     dst_delta = dst - dst_mean
     src_var = (src_delta ** 2).sum() / count
+    if src_var <= 1e-12 or float((dst_delta ** 2).sum()) <= 1e-12:
+        raise ValueError('关键点重合，无法计算人脸相似变换')
     cov = dst_delta.T @ src_delta / count
     u, singular, vt = np.linalg.svd(cov)
     sign = np.eye(2)

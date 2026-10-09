@@ -48,7 +48,7 @@ def align_kmu(
         raise FileNotFoundError(f"没有找到 KMU 图片: {source_dir}")
     output_dir.mkdir(parents=True, exist_ok=True)
     partial_path = output_dir / "_partial.jsonl"
-    done = _load_partial(partial_path, output_dir)
+    done = _load_partial(partial_path, output_dir, source_dir)
     pending = [path for path in sources if path.name not in done]
     print(f"已有 {len(done)} 张，待处理 {len(pending)} 张", flush=True)
     model = detector or YuNet() if pending else None
@@ -72,7 +72,7 @@ def align_kmu(
     return records
 
 
-def _load_partial(path: Path, output_dir: Path) -> dict[str, dict]:
+def _load_partial(path: Path, output_dir: Path, source_dir: Path | None = None) -> dict[str, dict]:
     """中断后续跑。只认清单里、输出文件还在的记录。最后一行写了一半就丢掉。"""
     done: dict[str, dict] = {}
     if not path.exists():
@@ -86,8 +86,13 @@ def _load_partial(path: Path, output_dir: Path) -> dict[str, dict]:
         except json.JSONDecodeError:
             break
         output = output_dir / record["output"]
-        if record.get("status") == "fail" or output.exists():
-            done[record["source"]] = record
+        if record.get("status") == "fail" or not output.is_file(): continue
+        if source_dir is not None and 'source_mtime_ns' in record:
+            source = source_dir / record['source']
+            if not source.is_file(): continue
+            info = source.stat()
+            if info.st_mtime_ns != record['source_mtime_ns'] or info.st_size != record['source_bytes']: continue
+        done[record["source"]] = record
     return done
 
 
@@ -96,6 +101,8 @@ def _align_one(path: Path, output_dir: Path, detector: YuNet) -> dict:
     output_path = output_dir / f"{path.stem}.png"
     record = {
         "source": path.name,
+        "source_bytes": path.stat().st_size,
+        "source_mtime_ns": path.stat().st_mtime_ns,
         "output": output_path.name,
         "person": meta["person"],
         "expression": meta["expression"],

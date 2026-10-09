@@ -1,6 +1,10 @@
 # Expression De-identification 交接说明
 
-这份交接说明对应 `gj-dev` 分支。项目目标是：在车载摄像头视频中先把画面转为灰度，再只修改人脸局部，最后把匿名结果送入表情分类器。原始图像不能进入表情分类器；头发、背景、座舱和路况区域保持原样。
+这份交接说明对应 `dev/gj` 分支。项目目标是：在车载摄像头视频中先把画面转为灰度，再只修改人脸局部，最后把匿名结果送入表情分类器。原始图像不能进入表情分类器；头发、背景、座舱和路况区域保持原样。
+
+2026-10-09 完整审计：详见 [`../docs/full-audit-20261009.md`](../docs/full-audit-20261009.md)。当前默认视频匿名输入的独立 SFace 命中率仍为 96.36%，未通过隐私验收。下述历史数字不能作为当前默认配置结果。
+
+2026-10-08 历史更新：桌面快速视频默认使用 `models/expression_realtime_stable.pt`，加入匿名域微调和连续帧决策。该权重需要单独复制；最新复测与操作说明见 [`../docs/realtime-expression-20261008.md`](../docs/realtime-expression-20261008.md)。下方 1100 张联合报告及帧率为历史配置，不能代替新实时权重的验证。
 
 ## 当前状态
 
@@ -11,7 +15,7 @@
 - **实时桌面视频**：机器链路每帧推理；视觉 GAN 每 15 帧刷新一次，再合成回当前灰度背景，保持实时性和视觉模型效果。
 - **身份模型**：只用于离线验收和实验图片诊断，不进入业务表情推理链路。
 
-当前已有验收报告：
+历史 GAN 配置验收报告：
 
 - 报告：`outputs/evaluation_machine_runtime_fast_strong_1681/evaluation.json`
 - 样本数：1100
@@ -21,7 +25,7 @@
 - SFace 平均余弦相似度：0.3798
 - RTX 3060 Laptop GPU 上，桌面双分支实时链路实测约 24.9 FPS；首次加载和首帧会明显更慢。
 
-这些数字是当前 KMU/本地模型配置的离线结果，不等于真实道路实车验收。近红外、角度、眼镜、遮挡和连续视频仍需用目标车载相机重新验证。
+这些数字是历史 KMU/GAN 配置的离线结果，不等于真实道路实车验收。近红外、角度、眼镜、遮挡和连续视频仍需用目标车载相机重新验证。
 
 ## 接手前先确认的目录
 
@@ -30,6 +34,8 @@
 - `handoff/asset_manifest.json`
 - `handoff/asset_manifest.csv`
 - `handoff/dataset-paths.zip`
+
+模型/外部代码完整包：`D:\temp\expression-deid-models-20261009.zip`（833 MB，CRC 和 SHA 已核验）。数据分包仍在 `D:\temp\expression-deid-datasets-20261004`，每卷小于 1 GB。详细 SHA 与验收范围见最新审计报告。
 
 其中记录了当前机器的绝对路径、仓库相对路径、文件数、总大小、用途和许可备注。换机器时以 `relative_path` 为准，把资源放到仓库对应位置即可。重新盘点运行：
 
@@ -54,7 +60,8 @@ PPB-Emo 是可选的近红外中性域适配数据：`datasets/ppb-emo/`。它�
 | 路径 | 用途 |
 | --- | --- |
 | `models/anonymizer_adversarial_v1.pt` | 快速机器匿名化 |
-| `models/expression_machine_selector_texture.pt` | 匿名图表情识别 |
+| `models/expression_realtime_stable.pt` | 当前快速视频表情识别；需核对最新 SHA |
+| `models/expression_machine_selector_texture.pt` | 单图/GAN 旧分类器 |
 | `models/ganonymization_50.ckpt` | 人眼展示用视觉匿名化 |
 | `models/face_landmarker.task` | 478 点关键点条件 |
 | `models/face_detection_yunet_2023mar.onnx` | 人脸检测 |
@@ -70,7 +77,7 @@ PPB-Emo 是可选的近红外中性域适配数据：`datasets/ppb-emo/`。它�
 ```powershell
 git clone https://github.com/zdcwn/expression-deid.git
 cd expression-deid
-git switch gj-dev
+git switch dev/gj
 
 python -m venv .venv
 .\\.venv\\Scripts\\Activate.ps1
@@ -123,7 +130,7 @@ python -m expression_deid.desktop_ui --device cuda
 python -m expression_deid.desktop_ui --device cuda
 ```
 
-第一页选择 KMU 样本，可以查看原图、展示匿名图、匿名图表情和身份诊断。第二页可以打开摄像头、选择本地视频或播放 `outputs/example_*.mp4`。第三页读取当前离线报告。
+第一页选择 KMU 样本，可以查看原图、展示匿名图、匿名图表情和身份诊断。第二页可以打开摄像头、选择本地视频或播放 `outputs/example_*.mp4`。第三页读取历史离线报告并标注口径；最新完整审计见上方文档。
 
 命令行视频验收：
 
@@ -187,7 +194,7 @@ python -m expression_deid evaluate --device cuda `
 - 原始图像不能进入表情分类器。
 - 处理顺序固定为：灰度化 → 局部人脸匿名化 → 仅匿名结果表情识别。
 - 匿名化不能直接拿另一张完整脸替换；头发、背景、头部轮廓和座舱区域要保留。
-- 身份模型和 SFace 只做诊断，不能参与表情标签、donor 选择或业务推理。
+- 身份模型和 SFace 可以在离线隐私实验中筛选匿名候选，但不能先识别原图表情或按表情类别替换素材；实时视频不加载这条诊断链路。
 - 每次改代码后至少运行 `compileall`、相关单元测试和一次接口/模型路径检查。
 - 不要把 `models/`、真实用户图片、完整外部数据集和 `.venv-anon/` 提交到 Git。
 

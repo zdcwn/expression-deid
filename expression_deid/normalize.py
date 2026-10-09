@@ -96,7 +96,10 @@ def load_stats(path=STATS_PATH) -> NormStats:
     payload = json.loads(path.read_text(encoding="utf-8"))
     if payload.get("channels") != 1 or payload.get("space") != "gray_0_1":
         raise ValueError(f"归一化参数不是单通道灰度: {path}")
-    return NormStats(mean=float(payload["mean"]), std=float(payload["std"]), channels=1)
+    mean, std = float(payload["mean"]), float(payload["std"])
+    if not np.isfinite(mean) or not 0 <= mean <= 1 or not np.isfinite(std) or std <= 0:
+        raise ValueError(f"归一化参数必须具有有限的 [0,1] 均值和正标准差: {path}")
+    return NormStats(mean=mean, std=std, channels=1)
 
 
 def normalize(gray: np.ndarray, stats: NormStats) -> np.ndarray:
@@ -118,7 +121,9 @@ def expression_input(
     image = gray
     generator = rng
     if augment or component_augment:
-        generator = rng if rng is not None else np.random.default_rng()
+        # Training seeds numpy globally, including each DataLoader worker.
+        # A fresh default_rng() ignores that seed and breaks reproducibility.
+        generator = rng if rng is not None else np.random
     if augment:
         image = _geometric_augment(image, generator)
     if image.shape[0] != EXPR_SIZE or image.shape[1] != EXPR_SIZE:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import json
+import hashlib
 import pickle
 from io import BytesIO
 from pathlib import Path
@@ -250,6 +251,15 @@ class FERPlusExpressionDataset:
             image_rows = list(csv.DictReader(handle))
         if len(image_rows) != len(rows):
             raise ValueError(f"FER+ 原始像素和标注数量不一致: {len(image_rows)} != {len(rows)}")
+        if any(image.get('Usage') != row.get('Usage') for image,row in zip(image_rows,rows)):
+            raise ValueError('FER+ 像素和标签的 Usage 划分顺序不一致')
+        def pixel_key(value):
+            pixels=np.fromstring(value,sep=' ',dtype=np.int16)
+            if pixels.size != 2304 or (pixels<0).any() or (pixels>255).any():
+                raise ValueError('FER2013 像素需要 2304 个 [0,255] 整数')
+            return hashlib.sha256(pixels.astype(np.uint8).tobytes()).digest()
+        heldout_pixels = {pixel_key(image['pixels']) for image in image_rows
+                          if image.get('Usage') in ('PublicTest','PrivateTest')} if split == 'train' else set()
         usage = "Training" if split == "train" else "PublicTest"
         columns = tuple(cls._label_map)
         records = []
@@ -258,8 +268,10 @@ class FERPlusExpressionDataset:
                 continue
             votes = {name: int(row.get(name, 0) or 0) for name in columns}
             name = max(columns, key=votes.get)
-            total = sum(votes.values())
-            if votes[name] < min_votes or total <= 0:
+            total = sum(int(row.get(key,0) or 0) for key in (*columns,'contempt','unknown','NF'))
+            if votes[name] < min_votes or total <= 0 or votes[name] <= total*.5:
+                continue
+            if heldout_pixels and pixel_key(image['pixels']) in heldout_pixels:
                 continue
             records.append({
                 "pixels": image["pixels"],
@@ -319,9 +331,13 @@ class FEREnhancedExpressionDataset:
             for row in csv.DictReader(handle):
                 if float(row.get("quality_score", 0.0) or 0.0) < quality_threshold:
                     continue
-                label = int(row["emotion"])
-                if not 0 <= label < len(EXPRESSION_NAMES):
+                # This mirror uses FER2013 order (angry=0, surprise=5),
+                # whereas runtime uses RAF order (surprise=0, anger=5).
+                fer_to_raf = {0: 5, 1: 2, 2: 1, 3: 3, 4: 4, 5: 0, 6: 6}
+                source_label = int(row['emotion'])
+                if source_label not in fer_to_raf:
                     continue
+                label = fer_to_raf[source_label]
                 pixels = row.get("pixels", "").strip()
                 if len(pixels.split()) != 48 * 48:
                     continue
@@ -348,7 +364,7 @@ class FEREnhancedExpressionDataset:
 
 
 def split_indices(length: int, validation_fraction: float = 0.2, seed: int = 0):
-    """Deterministically split indices without leaking adjacent frames."""
+    """Deterministic random image split; does not isolate people or sequences."""
     if length < 2:
         raise ValueError("数据量至少需要两张")
     if not 0 < validation_fraction < 1:
@@ -358,3 +374,23 @@ def split_indices(length: int, validation_fraction: float = 0.2, seed: int = 0):
     rng.shuffle(indices)
     cut = min(max(1, int(round(length * (1.0 - validation_fraction)))), length - 1)
     return indices[:cut].tolist(), indices[cut:].tolist()
+
+
+def split_kmu_sequence_tails(items, validation_fraction=0.2):
+    """Shared source-image boundary for training and the local donor bank.
+
+    People and sequences still overlap; this is a tail-frame regression split.
+    """
+    if not 0 < validation_fraction < 1: raise ValueError('KMU 划分比例必须在 0 和 1 之间')
+    groups={}
+    for index, (_path, _label, record) in enumerate(items):
+        groups.setdefault((record['person'],record['expression']),[]).append((int(record['frame']),index))
+    train,valid=[],[]
+    for values in groups.values():
+        values.sort()
+        count=min(max(1,int(round(len(values)*validation_fraction))),max(0,len(values)-1))
+        if count:
+            valid.extend(index for _,index in values[-count:])
+            train.extend(index for _,index in values[:-count])
+        else: train.extend(index for _,index in values)
+    return train,valid
