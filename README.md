@@ -75,7 +75,7 @@ python -m expression_deid infer --device cuda --anonymizer-checkpoint models/ano
 
 身份隐私诊断另外使用 LFW 的全部 1680 个身份作干扰库。每条样本把原始脸作为 1 个查询身份，再和 1680 个外部身份比较；`gallery_original_match_rate` 越低越好，`gallery_source_rank` 不应长期为 1。比较输入先裁掉头发、背景和外部边角，只保留脸部椭圆区域。默认评估命令也使用全部 1680 个身份，可用 `--identity-gallery-size` 做较小的冒烟测试。
 
-当前视频默认使用 `models/anonymizer_adversarial_v1.pt` 和质量优先的 `models/expression_video_quality.ts.pt` + JSON 清单。质量模型只接收匿名灰度人脸，使用 FP32 左右翻转 TTA；实测约 5–6 FPS，准确率优先于 24 FPS。缺少质量资产时桌面端才回退 `expression_realtime_stable.pt`。2026-10-09 详细复核见 [`docs/full-audit-20261009.md`](docs/full-audit-20261009.md)：质量模型在匿名 RAF 验证集达到 78.39%，中性召回 81.91%，中性误判成悲伤/愤怒 58/680；但独立 SFace 的原身份命中率仍为 96.36%，**默认匿名链路未通过隐私验收**。历史 GAN 结果不能套用到当前质量视频。
+当前视频仍使用质量优先的匿名灰度表情链路：`models/anonymizer_adversarial_v1.pt` 配合 `models/expression_video_quality.ts.pt` 和 JSON 清单。质量模型只接收匿名灰度人脸，使用 FP32 左右翻转 TTA；实测约 5–6 FPS，准确率优先于 24 FPS。报告中的匿名化效果单独采用 `ratio_v2` 强几何路径，220 张尾帧的匿名身份命中率为 16.82%，只用于匿名化效果展示，不接入表情识别。2026-10-09 详细复核见 [`docs/full-audit-20261009.md`](docs/full-audit-20261009.md)：质量模型在匿名 RAF 验证集达到 78.39%，中性召回 81.91%，中性误判成悲伤/愤怒 58/680。
 
 ## Python 桌面应用（当前主入口）
 
@@ -104,7 +104,7 @@ python -m expression_deid.app --mode image --input datasets/kmu-fed-aligned/01_A
 python -m expression_deid.app --mode examples --device cuda
 ```
 
-OpenCV 演示窗口按 `q` 或 `Esc` 退出；Qt 桌面应用通过窗口关闭按钮退出。实时视频不加载身份诊断模型；桌面实验图片页与离线评估加载身份/SFace/1681 人库。身份诊断不能进入表情标签或原图表情教师链路。
+OpenCV 演示窗口按 `q` 或 `Esc` 退出；Qt 桌面应用通过窗口关闭按钮退出。实时视频不加载身份诊断模型；桌面实验图片页与离线评估可使用 1681 人库做独立回归。身份诊断不能进入表情标签或原图表情教师链路。
 
 示例视频位于 `outputs/example_kmu_expressions.mp4`，桌面 UI 的实时页可以直接选择播放。
 

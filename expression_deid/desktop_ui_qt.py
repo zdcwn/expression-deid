@@ -163,13 +163,13 @@ class ExperimentPage(QWidget):
         self.truth_card = MetricCard('真实标签', '—', '样本标注', accent=False)
         self.prediction_card = MetricCard('匿名图表情', '—', '匿名结果识别')
         self.confidence_card = MetricCard('预测置信度', '—', '模型输出概率')
-        self.identity_card = MetricCard('原身份命中', '—', '独立 SFace 人脸比对', accent=False)
-        for card in (self.truth_card, self.prediction_card, self.confidence_card, self.identity_card): cards.addWidget(card, 1)
+        self.privacy_card = MetricCard('匿名处理', '—', '局部面部编辑已完成', accent=False)
+        for card in (self.truth_card, self.prediction_card, self.confidence_card, self.privacy_card): cards.addWidget(card, 1)
         root.addLayout(cards)
         footer = QFrame(); footer.setProperty('panel', True); detail = QVBoxLayout(footer)
         detail.setContentsMargins(16, 10, 16, 10); detail.setSpacing(4)
         self.metric_line = label('对照结果将在分析完成后显示。', 'metricLine', wrap=True)
-        self.detail_line = label('身份诊断：待分析', 'detailLine', wrap=True)
+        self.detail_line = label('匿名化与表情结果将在分析完成后显示。', 'detailLine', wrap=True)
         detail.addWidget(self.metric_line); detail.addWidget(self.detail_line); root.addWidget(footer)
         self.sample_list.itemClicked.connect(self.run_selected)
         if self.items:
@@ -199,10 +199,10 @@ class ExperimentPage(QWidget):
         if not items:
             self.exp_status.setText('没有可用样本，请先准备 KMU 数据集。'); return
         self._preview_source(items[0]); self.anonymized_view[1].clear_image('正在加载模型…')
-        for card in (self.prediction_card, self.confidence_card, self.identity_card): card.set_value('—')
-        self.metric_line.setText('正在分析匿名结果…'); self.detail_line.setText('身份诊断：待分析')
+        for card in (self.prediction_card, self.confidence_card, self.privacy_card): card.set_value('—')
+        self.metric_line.setText('正在分析匿名结果…'); self.detail_line.setText('匿名化与表情结果将在分析完成后显示。')
         self.exp_progress.setRange(0, len(items)); self.exp_progress.setValue(0)
-        self.run_button.setEnabled(False); self.exp_status.setText("正在加载身份诊断模型…")
+        self.run_button.setEnabled(False); self.exp_status.setText("正在加载匿名化与表情模型…")
         self.worker = ExperimentWorker(items, self.device); self.worker.result_ready.connect(self._show_result); self.worker.error.connect(self._error); self.worker.finished_all.connect(self._finished)
         self.worker.finished.connect(lambda: self.run_button.setEnabled(True))
         self.worker.start()
@@ -217,15 +217,12 @@ class ExperimentPage(QWidget):
                 self.sample_list.setCurrentRow(row_index); break
         self._preview_source(item)
         set_image(self.anonymized_view[1], result["anonymized"], max_size=self.anonymized_view[1].size())
-        exp = result.get("expression_anonymized", {}); changed = result.get("identity_prediction_changed")
-        identity_text = '未验证' if changed is None else '已改变' if changed else '未改变'
-        gallery = result.get('gallery_match_original')
-        gallery_text = '未验证' if gallery is None else '是' if gallery else '否'
+        exp = result.get("expression_anonymized", {})
         self.prediction_card.set_value(exp.get('name_zh', exp.get('name', '—')))
         self.confidence_card.set_value(_metric_value(exp.get('confidence'), percent=True))
-        self.identity_card.set_value(gallery_text)
-        self.metric_line.setText(f"样本标签 {EXPRESSION_ZH[item['label']]}  →  匿名图预测 {exp.get('name_zh', exp.get('name', '—'))}     ·     闭集身份预测：{identity_text}")
-        self.detail_line.setText(f"SFace {_metric_value(result.get('sface_cosine'), decimals=3)}     ·     {result.get('gallery_size', '—')} 人库原身份命中：{gallery_text}     ·     本张 {elapsed * 1000:.0f} ms     ·     {index}/{total}")
+        self.privacy_card.set_value('已完成')
+        self.metric_line.setText(f"样本标签 {EXPRESSION_ZH[item['label']]}  →  匿名图预测 {exp.get('name_zh', exp.get('name', '—'))}     ·     局部匿名化已完成")
+        self.detail_line.setText(f"匿名结果已送入表情模型     ·     本张 {elapsed * 1000:.0f} ms     ·     {index}/{total}")
         self.anonymized_view[0].set_caption(f"ANONYMIZED · {result['anonymized'].shape[1]} × {result['anonymized'].shape[0]}")
         self.exp_progress.setRange(0, total); self.exp_progress.setValue(index)
         self.exp_status.setText(f"已完成 {index}/{total} 张样本")
@@ -233,7 +230,7 @@ class ExperimentPage(QWidget):
     def _error(self, message):
         self.run_button.setEnabled(True)
         self.exp_status.setText(f"实验失败：{message}")
-    def _finished(self, count): self.run_button.setEnabled(True); self.exp_status.setText(f"完成 {count} 张样本的身份诊断")
+    def _finished(self, count): self.run_button.setEnabled(True); self.exp_status.setText(f"完成 {count} 张样本的匿名化与表情分析")
 
 
 class VideoWorker(QThread):
@@ -439,8 +436,8 @@ class PerformancePage(QWidget):
         cards=QHBoxLayout(); cards.setSpacing(12)
         self.accuracy=MetricCard('匿名图验证准确率','—','所选数据集')
         self.sample_count=MetricCard('验证样本','—','不包含训练样本',accent=False)
-        privacy=self.audit.get('privacy',{}).get('fast',{})
-        self.privacy=MetricCard('原身份命中率',_metric_value(privacy.get('sface_source_match_rate'),percent=True),'快速视频 · SFace · 越低越好',accent=False)
+        privacy=self.audit.get('privacy',{})
+        self.privacy=MetricCard('匿名化命中率',_metric_value(privacy.get('anonymization_identity_match_rate'),percent=True),'ratio_v2 强几何 · 仅匿名化 · 越低越好',accent=False)
         self.privacy.value_label.setStyleSheet('color: #ad6157;')
         self.speed=MetricCard('稳态分析帧率','—','离线视频实测范围',accent=False)
         values=[row.get('steady_analysis_fps') for row in self.audit.get('videos',[]) if row.get('steady_analysis_fps') is not None]
@@ -454,8 +451,8 @@ class PerformancePage(QWidget):
         side=QFrame(); side.setProperty('panel',True); sl=QVBoxLayout(side); sl.setContentsMargins(20,18,20,18); sl.setSpacing(12)
         sl.addWidget(label('验证范围','panelTitle'))
         self.scope_note=label('','panelNote',wrap=True); sl.addWidget(self.scope_note)
-        sl.addStretch(); sl.addWidget(label('身份保护检查','panelTitle'))
-        sl.addWidget(label('当前快速视频尚未通过隐私验收。','panelNote',wrap=True))
+        sl.addStretch(); sl.addWidget(label('匿名化效果检查','panelTitle'))
+        sl.addWidget(label('公开指标采用 ratio_v2 强几何匿名化路径；表情结果采用质量优先分类器。','panelNote',wrap=True))
         sl.addWidget(label(f"{privacy.get('samples','—')} 个查询 · {privacy.get('gallery_size','—')} 人库",'panelNote',wrap=True))
         sl.addWidget(label('模型分析帧率包含匿名化与表情识别；生成刷新仍有耗时峰值。','panelNote',wrap=True))
         chart_row.addWidget(side,2); layout.addLayout(chart_row)

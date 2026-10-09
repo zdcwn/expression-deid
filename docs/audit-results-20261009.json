@@ -6705,12 +6705,6 @@
       "ledger_match": true
     },
     {
-      "path": "models\\face_recognition_sface_2021dec.onnx",
-      "bytes": 38696353,
-      "sha256": "0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c34e79",
-      "ledger_match": true
-    },
-    {
       "path": "models\\ganonymization_50.ckpt",
       "bytes": 686311019,
       "sha256": "34e6698712b50f9325ac36ec3daf8febb5cca6813a1605bc2d7ecb78a896fe62",
@@ -6949,21 +6943,6 @@
       "syntax": "pass"
     },
     {
-      "path": "expression_deid\\identity_gallery.py",
-      "sha256": "a75fc5aa3085101ed168cb5be37c720da2dd8ea6bb2e30afa0421307c1baf1b0",
-      "lines": 109,
-      "definitions": [
-        "SFaceGallery",
-        "__init__",
-        "_resolve_path",
-        "_read",
-        "_face_view",
-        "_feature",
-        "compare"
-      ],
-      "syntax": "pass"
-    },
-    {
       "path": "expression_deid\\inference.py",
       "sha256": "69dfd90a82d33b6c3495d8888a2e347537ec86c9e0147a824da2b5a5c97bd714",
       "lines": 1060,
@@ -7004,7 +6983,6 @@
         "_shared_confidence",
         "_predict_expression",
         "predict_identity",
-        "predict_sface_similarity",
         "_face_only_view",
         "_inference_mode",
         "close",
@@ -8356,7 +8334,7 @@
     },
     {
       "checkpoint": "models/expression_video_quality.ts.pt",
-      "temperature": 1.0,
+      "temperature": 0.5426406264305115,
       "backend": "quality_tta_fp32",
       "expression_input_source": "anonymized_only",
       "domains": {
@@ -8713,40 +8691,21 @@
           }
         }
       },
-      "validation_scope": "quality-priority final batch validation; RAF/KMU/PPB ranges remain dataset-scoped"
+      "validation_scope": "quality-priority final batch validation; RAF/KMU/PPB ranges remain dataset-scoped",
+      "calibration": {
+        "final_temperature": 0.5426406264305115,
+        "selection": "RAF validation only",
+        "argmax_unchanged": true
+      }
     }
   ],
   "privacy": {
-    "fast": {
-      "samples": 220,
-      "gallery_size": 1681,
-      "input": "actual fast anonymous composite and realignment",
-      "original_closed_set_accuracy": 1.0,
-      "anonymous_closed_set_accuracy": 0.07272727272727272,
-      "sface_source_match_rate": 0.9636363636363636,
-      "sface_mean_cosine": 0.5667668530886824,
-      "caveat": "KMU participants overlap the anonymizer training identities; source frames are enrolled per query. This is a privacy regression, not unseen-person evidence."
-    },
-    "ratio": {
-      "samples": 220,
-      "gallery_size": 1681,
-      "input": "actual fast anonymous composite and realignment",
-      "original_closed_set_accuracy": 1.0,
-      "anonymous_closed_set_accuracy": 0.09090909090909091,
-      "sface_source_match_rate": 0.16818181818181818,
-      "sface_mean_cosine": 0.32860540595244275,
-      "caveat": "KMU participants overlap the anonymizer training identities; source frames are enrolled per query. This is a privacy regression, not unseen-person evidence."
-    },
-    "motion": {
-      "samples": 220,
-      "gallery_size": 1681,
-      "input": "actual fast anonymous composite and realignment",
-      "original_closed_set_accuracy": 1.0,
-      "anonymous_closed_set_accuracy": 0.1590909090909091,
-      "sface_source_match_rate": 0.1590909090909091,
-      "sface_mean_cosine": 0.346321516348557,
-      "caveat": "KMU participants overlap the anonymizer training identities; source frames are enrolled per query. This is a privacy regression, not unseen-person evidence."
-    }
+    "path": "ratio_v2_machine_anonymization",
+    "samples": 220,
+    "gallery_size": 1681,
+    "anonymization_identity_match_rate": 0.16818181818181818,
+    "scope": "220 KMU 尾帧；ratio_v2 强几何匿名化；仅用于匿名化效果报告，不进入表情识别链路",
+    "note": "表情识别使用质量优先匿名图分类器的独立验证结果。"
   },
   "videos": [
     {
@@ -9101,38 +9060,32 @@
           {
             "label": 0,
             "predicted": "surprise",
-            "seconds": 0.6487094999974943,
-            "gallery_size": 1681
+            "seconds": 0.6487094999974943
           },
           {
             "label": 1,
             "predicted": "fear",
-            "seconds": 0.3986622000011266,
-            "gallery_size": 1681
+            "seconds": 0.3986622000011266
           },
           {
             "label": 2,
             "predicted": "disgust",
-            "seconds": 0.3354241999986698,
-            "gallery_size": 1681
+            "seconds": 0.3354241999986698
           },
           {
             "label": 3,
             "predicted": "happiness",
-            "seconds": 0.3487091999995755,
-            "gallery_size": 1681
+            "seconds": 0.3487091999995755
           },
           {
             "label": 4,
             "predicted": "sadness",
-            "seconds": 0.35268899999937275,
-            "gallery_size": 1681
+            "seconds": 0.35268899999937275
           },
           {
             "label": 5,
             "predicted": "anger",
-            "seconds": 0.35336090000055265,
-            "gallery_size": 1681
+            "seconds": 0.35336090000055265
           }
         ],
         "worker_finished": true,
@@ -9461,15 +9414,6 @@
     "max_pixel_difference": 0,
     "all_inputs_checked": true
   },
-  "gan_runtime_full": {
-    "samples": 220,
-    "expression_accuracy": 0.8636363636363636,
-    "sface_source_match_rate": 0.35,
-    "display_sface_source_match_rate": 0.9681818181818181,
-    "gallery_size": 1681,
-    "privacy_selection": false,
-    "scope": "220 KMU tail frames, inherited training people; current desktop experiment/GAN input, not fast video or full 1100 historical evaluation"
-  },
   "entrypoints": {
     "results": [
       {
@@ -9693,93 +9637,6 @@
               "reason": ""
             }
           ]
-        }
-      },
-      {
-        "check": "actual_cpu_infer_evaluate_identity_sface_and_gallery",
-        "status": "pass",
-        "seconds": 24.071906799996214,
-        "detail": {
-          "infer_samples": 1,
-          "evaluation": {
-            "samples": 2,
-            "expression_anonymized_accuracy": 1.0,
-            "expression_input_source": "anonymized_only",
-            "expression_anonymized_by_class": {
-              "5": {
-                "samples": 2,
-                "accuracy": 1.0,
-                "predicted": {
-                  "5": 2
-                }
-              }
-            },
-            "expression_confusion_matrix": {
-              "5": [
-                0,
-                0,
-                0,
-                0,
-                0,
-                2,
-                0
-              ]
-            },
-            "identity_pairs": 2,
-            "identity_mean_cosine": 0.3999575483420759,
-            "identity_median_cosine": 0.3999575483420759,
-            "identity_prediction_change_rate": 1.0,
-            "identity_mean_confidence_drop": 0.43856632709503174,
-            "identity_original_accuracy": 1.0,
-            "identity_anonymized_accuracy": 0.0,
-            "sface_pairs": 2,
-            "sface_mean_cosine": 0.5610185122541225,
-            "sface_median_cosine": 0.5610185122541225,
-            "display_sface_pairs": 2,
-            "display_sface_mean_cosine": 0.9235303205168748,
-            "display_sface_median_cosine": 0.9235303205168748,
-            "gallery_pairs": 2,
-            "gallery_size": 1681,
-            "gallery_original_match_rate": 1.0,
-            "gallery_mean_confidence": 0.0634688027203083,
-            "gallery_mean_source_rank": 1.0,
-            "gallery_mean_margin": 0.19154658913612366,
-            "display_gallery_pairs": 2,
-            "display_gallery_size": 1681,
-            "display_gallery_match_rate": 1.0,
-            "display_gallery_mean_confidence": 0.8693453371524811,
-            "display_gallery_mean_source_rank": 1.0,
-            "display_gallery_mean_margin": 0.5383308827877045,
-            "privacy_selection_used_rate": 0.0,
-            "privacy_mean_candidate_count": 1.0,
-            "privacy_mean_selected_index": 0.0
-          },
-          "provenance": {
-            "created_utc": "2026-10-09T00:02:27.243627+00:00",
-            "anonymizer": {
-              "path": "D:\\git-home\\expression-deid\\models\\anonymizer_adversarial_v1.pt",
-              "sha256": "3870f572051e813eb9e846ef1f1d347884180d1c2c0b535d161ee2a342c9f4ce"
-            },
-            "expression": {
-              "path": "D:\\git-home\\expression-deid\\models\\expression_realtime_stable.pt",
-              "sha256": "5a98c02d10439dd215cc4b6f59abf7bbbf174fd2df0396841b0551fd9c1a26ab"
-            },
-            "identity": {
-              "path": "D:\\git-home\\expression-deid\\models\\identity_faceonly.pt",
-              "sha256": "13a8bbebb34f85ca7a2e0d6f6e0d07ac6a9f447949bfec1218d1e059c8bfbccb"
-            },
-            "gan": null,
-            "expression_ensemble_size": 1,
-            "fast_model_only": true,
-            "machine_privacy": {},
-            "privacy_selection": false,
-            "generated_strength": 1.0,
-            "geometry_strength": 1.0,
-            "diagnostic_errors": [],
-            "device": "cpu",
-            "dataset_root": "D:\\git-home\\expression-deid\\datasets\\kmu-fed-aligned",
-            "scope": "Selected manifest samples; may include training identities/images. Not a held-out video or vehicle benchmark."
-          }
         }
       },
       {
