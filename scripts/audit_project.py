@@ -120,6 +120,28 @@ def models(cache, device):
         started = time.perf_counter()
         row = dict(path=str(path.relative_to(ROOT)), bytes=path.stat().st_size, sha256=sha256(path))
         try:
+            if path.name == 'expression_video_quality.ts.pt':
+                from expression_deid.expression_quality import QualityExpressionPredictor
+                predictor = QualityExpressionPredictor(device)
+                if predictor.metadata['quality_model']['file'] != path.name:
+                    raise ValueError('质量模式清单指向其他权重')
+                probabilities = np.array([predictor.predict_anonymous(image, input_source='anonymized_only')['probabilities'] for image in values])
+                row.update(kind='expression_quality', finite_weights=all(torch.isfinite(value).all().item() for value in predictor.quality.state_dict().values()),
+                           output_shape=list(probabilities[:8].shape), finite_output=bool(np.isfinite(probabilities).all()),
+                           precision='FP32; FP16 disabled for accuracy mode', expression_input_source='anonymized_only',
+                           fast_anonymous_domain={})
+                for split in ('valid', 'test'):
+                    for domain in ('raf', 'kmu', 'ppb'):
+                        mask = (data['splits'][indices] == split) & (data['domains'][indices] == domain)
+                        if mask.any():
+                            row['fast_anonymous_domain'][f'{domain}/{split}'] = classification_metrics(
+                                torch.tensor(np.log(probabilities[mask].clip(1e-12))), data['labels'][indices][mask], 1.0
+                            )
+                row.update(status='pass' if row['finite_weights'] and row['finite_output'] else 'fail', seconds=time.perf_counter()-started)
+                reports.append(row)
+                print(f"model {path.name}: {row['status']}", flush=True)
+                del predictor
+                continue
             model, payload = load_checkpoint(path, device=device)
             row.update(kind=payload['kind'], epoch=payload.get('epoch'), model_config=payload.get('model_config'),
                        finite_weights=all(torch.isfinite(value).all().item() for value in model.state_dict().values()),

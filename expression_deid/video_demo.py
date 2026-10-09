@@ -50,6 +50,8 @@ class FastVideoRunner:
         *,
         display_pipeline: ExpressionDeidentifier | None = None,
         display_interval: int = 1,
+        expression_predictor=None,
+        track_reset_gap: float = .75,
     ):
         self.pipeline = pipeline
         # The optional display pipeline lets a desktop client use the same
@@ -59,7 +61,10 @@ class FastVideoRunner:
         self.display_pipeline = display_pipeline or pipeline
         self.display_interval = max(1, int(display_interval))
         self.detect_interval = max(1, int(detect_interval))
-        self.expression_filter = TemporalExpressionFilter()
+        self.expression_predictor = expression_predictor
+        if expression_predictor is not None and hasattr(expression_predictor, 'validate_pipeline'):
+            expression_predictor.validate_pipeline(pipeline)
+        self.expression_filter = TemporalExpressionFilter(reset_gap=track_reset_gap)
         self.last_frame_index = None
         self.last_timestamp = None
         self.track_id = 0
@@ -125,7 +130,7 @@ class FastVideoRunner:
         if not np.isfinite(timestamp): raise ValueError('视频时间戳必须为有限数值')
         if (self.last_frame_index is not None and frame_index <= self.last_frame_index
                 or self.frame_shape is not None and self.frame_shape != rgb.shape[:2]
-                or self.last_timestamp is not None and (timestamp <= self.last_timestamp or timestamp - self.last_timestamp > .75)):
+                or self.last_timestamp is not None and (timestamp <= self.last_timestamp or timestamp - self.last_timestamp > self.expression_filter.reset_gap)):
             self.reset()
         self.last_frame_index, self.frame_shape = frame_index, rgb.shape[:2]
         self.last_timestamp = timestamp
@@ -164,7 +169,12 @@ class FastVideoRunner:
             gray, machine100, self.face, self.matrix, mask_mode=getattr(self.pipeline, 'machine_privacy', {}).get('mask_mode', 'features')
         )
         edited100 = self.pipeline._resize(warp_gray(machine_frame, self.landmarks)[0])
-        expression = self.pipeline.predict_expression(edited100, aligned=True)
+        if self.expression_predictor is None:
+            expression = self.pipeline.predict_expression(edited100, aligned=True)
+        else:
+            expression = self.expression_predictor.predict_anonymous(
+                edited100, input_source='anonymized_only'
+            )
         decision = self.expression_filter.update(expression["probabilities"], timestamp)
         label = decision["label"]
         # Human-facing path: a separate local face edit used only for display.
@@ -214,6 +224,7 @@ class FastVideoRunner:
             "raw_confidence": float(expression["confidence"]),
             "raw_probabilities": expression["probabilities"],
             "expression_input_source": "anonymized_only",
+            "expression_backend": expression.get('expression_backend', 'compact_single_frame'),
             "expression_privacy_path": "machine_targeted_local_edit",
             "display_privacy_path": "human_facing_local_face_edit",
             "fit_error": float(fit_error),

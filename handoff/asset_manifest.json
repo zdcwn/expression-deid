@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2026-10-09T00:15:52+00:00",
+  "generated_at_utc": "2026-10-09T05:33:59+00:00",
   "source_machine_root": "D:\\git-home\\expression-deid",
   "warning": "This package records paths and inventory only. Large datasets and checkpoints remain local and are not copied into Git.",
   "datasets": [
@@ -216,6 +216,36 @@
       ]
     },
     {
+      "name": "expression_video_quality.ts.pt",
+      "relative_path": "models/expression_video_quality.ts.pt",
+      "absolute_path_on_source_machine": "D:\\git-home\\expression-deid\\models\\expression_video_quality.ts.pt",
+      "role": "required-for-accuracy-video",
+      "description": "FP32 TorchScript quality-priority video expression classifier; anonymous input only",
+      "note": "",
+      "exists": true,
+      "files": 1,
+      "bytes": 31803132,
+      "sha256": "b66bc11ec49f1340d457804dc6ddfb6403b577d4f92528ce85af31e0d664b4c2",
+      "sample_files": [
+        "expression_video_quality.ts.pt"
+      ]
+    },
+    {
+      "name": "expression_video_quality.json",
+      "relative_path": "models/expression_video_quality.json",
+      "absolute_path_on_source_machine": "D:\\git-home\\expression-deid\\models\\expression_video_quality.json",
+      "role": "required-for-accuracy-video",
+      "description": "quality model contract, calibration, provenance and SHA-256",
+      "note": "",
+      "exists": true,
+      "files": 1,
+      "bytes": 5079,
+      "sha256": "50578f80d20b15227242b0bd695805ce2d4bfea12fa01819eccfd0f23dfc7a17",
+      "sample_files": [
+        "expression_video_quality.json"
+      ]
+    },
+    {
       "name": "expression_machine_selector_texture.pt",
       "relative_path": "models/expression_machine_selector_texture.pt",
       "absolute_path_on_source_machine": "D:\\git-home\\expression-deid\\models\\expression_machine_selector_texture.pt",
@@ -360,8 +390,8 @@
       "description": "2026-10-08/09 audit evidence; contains experimental candidates, not all deployed",
       "note": "",
       "exists": true,
-      "files": 117,
-      "bytes": 368032993,
+      "files": 120,
+      "bytes": 368033759,
       "sample_files": [
         "anonymous_motion_cache.npz",
         "anonymous_private_cache.npz",

@@ -8353,6 +8353,367 @@
       "machine_privacy": {},
       "donors": "KMU 880 train frames + RAF 300 train neutral; validation donors excluded",
       "scope": "Tail-frame KMU regression; inherited checkpoints are not an unseen-person benchmark."
+    },
+    {
+      "checkpoint": "models/expression_video_quality.ts.pt",
+      "temperature": 1.0,
+      "backend": "quality_tta_fp32",
+      "expression_input_source": "anonymized_only",
+      "domains": {
+        "valid_raf": {
+          "samples": 3068,
+          "accuracy": 0.7838983050847458,
+          "neutral_recall": 0.8191176470588235,
+          "neutral_as_sad_angry": 58,
+          "confusion": [
+            [
+              255,
+              7,
+              3,
+              15,
+              8,
+              7,
+              34
+            ],
+            [
+              10,
+              39,
+              1,
+              6,
+              11,
+              3,
+              4
+            ],
+            [
+              12,
+              1,
+              46,
+              21,
+              20,
+              17,
+              43
+            ],
+            [
+              19,
+              4,
+              8,
+              1065,
+              18,
+              8,
+              63
+            ],
+            [
+              16,
+              4,
+              13,
+              22,
+              336,
+              6,
+              81
+            ],
+            [
+              11,
+              3,
+              6,
+              9,
+              13,
+              107,
+              13
+            ],
+            [
+              36,
+              0,
+              10,
+              19,
+              55,
+              3,
+              557
+            ]
+          ],
+          "by_class": {
+            "0": {
+              "samples": 329,
+              "accuracy": 0.7750759878419453
+            },
+            "1": {
+              "samples": 74,
+              "accuracy": 0.527027027027027
+            },
+            "2": {
+              "samples": 160,
+              "accuracy": 0.2875
+            },
+            "3": {
+              "samples": 1185,
+              "accuracy": 0.8987341772151899
+            },
+            "4": {
+              "samples": 478,
+              "accuracy": 0.702928870292887
+            },
+            "5": {
+              "samples": 162,
+              "accuracy": 0.6604938271604939
+            },
+            "6": {
+              "samples": 680,
+              "accuracy": 0.8191176470588235
+            }
+          }
+        },
+        "valid_kmu": {
+          "samples": 220,
+          "accuracy": 0.9954545454545455,
+          "neutral_recall": null,
+          "neutral_as_sad_angry": 0,
+          "confusion": [
+            [
+              40,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              40,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              24,
+              0,
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              1,
+              0,
+              41,
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0,
+              0,
+              36,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0,
+              0,
+              0,
+              38,
+              0
+            ],
+            [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          ],
+          "by_class": {
+            "0": {
+              "samples": 40,
+              "accuracy": 1.0
+            },
+            "1": {
+              "samples": 40,
+              "accuracy": 1.0
+            },
+            "2": {
+              "samples": 24,
+              "accuracy": 1.0
+            },
+            "3": {
+              "samples": 42,
+              "accuracy": 0.9761904761904762
+            },
+            "4": {
+              "samples": 36,
+              "accuracy": 1.0
+            },
+            "5": {
+              "samples": 38,
+              "accuracy": 1.0
+            }
+          }
+        },
+        "valid_ppb": {
+          "samples": 34,
+          "accuracy": 1.0,
+          "neutral_recall": 1.0,
+          "neutral_as_sad_angry": 0,
+          "confusion": [
+            [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              34
+            ]
+          ],
+          "by_class": {
+            "6": {
+              "samples": 34,
+              "accuracy": 1.0
+            }
+          }
+        },
+        "test_ppb": {
+          "samples": 35,
+          "accuracy": 1.0,
+          "neutral_recall": 1.0,
+          "neutral_as_sad_angry": 0,
+          "confusion": [
+            [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              35
+            ]
+          ],
+          "by_class": {
+            "6": {
+              "samples": 35,
+              "accuracy": 1.0
+            }
+          }
+        }
+      },
+      "validation_scope": "quality-priority final batch validation; RAF/KMU/PPB ranges remain dataset-scoped"
     }
   ],
   "privacy": {

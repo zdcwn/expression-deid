@@ -75,7 +75,7 @@ python -m expression_deid infer --device cuda --anonymizer-checkpoint models/ano
 
 身份隐私诊断另外使用 LFW 的全部 1680 个身份作干扰库。每条样本把原始脸作为 1 个查询身份，再和 1680 个外部身份比较；`gallery_original_match_rate` 越低越好，`gallery_source_rank` 不应长期为 1。比较输入先裁掉头发、背景和外部边角，只保留脸部椭圆区域。默认评估命令也使用全部 1680 个身份，可用 `--identity-gallery-size` 做较小的冒烟测试。
 
-当前快速视频使用 `models/anonymizer_adversarial_v1.pt` 和 `models/expression_realtime_stable.pt`。2026-10-09 详细复核见 [`docs/full-audit-20261009.md`](docs/full-audit-20261009.md)：匿名 RAF 完整验证集表情准确率 68.42%，KMU 尾帧 100%；但独立 SFace 的原身份命中率仍为 96.36%，**默认匿名链路未通过隐私验收**。`outputs/evaluation_machine_runtime_fast_strong_1681/evaluation.json` 的 86.55%/34.45% 是另一套历史 GAN 配置的结果，不能套用到当前快速视频。
+当前视频默认使用 `models/anonymizer_adversarial_v1.pt` 和质量优先的 `models/expression_video_quality.ts.pt` + JSON 清单。质量模型只接收匿名灰度人脸，使用 FP32 左右翻转 TTA；实测约 5–6 FPS，准确率优先于 24 FPS。缺少质量资产时桌面端才回退 `expression_realtime_stable.pt`。2026-10-09 详细复核见 [`docs/full-audit-20261009.md`](docs/full-audit-20261009.md)：质量模型在匿名 RAF 验证集达到 78.39%，中性召回 81.91%，中性误判成悲伤/愤怒 58/680；但独立 SFace 的原身份命中率仍为 96.36%，**默认匿名链路未通过隐私验收**。历史 GAN 结果不能套用到当前质量视频。
 
 ## Python 桌面应用（当前主入口）
 
@@ -108,7 +108,7 @@ OpenCV 演示窗口按 `q` 或 `Esc` 退出；Qt 桌面应用通过窗口关闭�
 
 示例视频位于 `outputs/example_kmu_expressions.mp4`，桌面 UI 的实时页可以直接选择播放。
 
-2026-10-09 的视频表情优化默认使用 `models/expression_realtime_stable.pt`，加入匿名域微调、轻微光照/位置变化的一致性训练、固定轨迹素材和持续证据判断。尚未确认时显示“暂不确定”，不会硬猜中性。新权重只替换快速视频分类模型，单图/GAN 质量模式保持原权重。最新训练、逐帧检查、权重哈希和未通过项见 [`docs/full-audit-20261009.md`](docs/full-audit-20261009.md)；[`docs/realtime-expression-20261008.md`](docs/realtime-expression-20261008.md) 保留为旧权重的历史记录。通用表情和用户本人摄像头仍需进一步验证；模型表现页呈现有日期的保存记录，不是当前摄像头的实时准确率。
+2026-10-09 的视频表情优化加入匿名域全量训练、FP32 质量表征、左右翻转 TTA、温度校准和持续证据判断。尚未确认时显示“暂不确定”，不会硬猜中性。质量模型与快速模型都只使用匿名图；单图/GAN 质量模式保持原路径。训练、逐帧检查、权重哈希和未通过项见 [`docs/full-audit-20261009.md`](docs/full-audit-20261009.md)；[`docs/realtime-expression-20261008.md`](docs/realtime-expression-20261008.md) 保留为旧权重的历史记录。通用表情和用户本人摄像头仍需进一步验证；模型表现页呈现有日期的保存记录，不是当前摄像头的实时准确率。
 
 ## Python 视频演示
 

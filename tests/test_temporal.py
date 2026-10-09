@@ -203,6 +203,7 @@ class VideoTrackTest(unittest.TestCase):
         shown, info = runner.process_frame(rgb, 1, timestamp=1 / 30)
         self.assertEqual(info['display_status'], 'concealed_after_landmark_loss')
         self.assertEqual(shown[80, 80], 0)
+
         self.assertGreater(pipeline.classified[-1].mean(), 150)
         display.fail = False
         runner.process_frame(rgb, 2, timestamp=2 / 30)
@@ -213,6 +214,31 @@ class VideoTrackTest(unittest.TestCase):
         shown, info = runner.process_frame(rgb, 4, timestamp=.7)
         self.assertEqual(info['display_status'], 'concealed_after_landmark_loss')
         self.assertEqual(shown[80, 80], 0)
+
+        class QualityPredictor:
+            def __init__(self): self.inputs = []
+
+            def predict_anonymous(self, image, *, input_source):
+                self.asserted_source = input_source
+                self.inputs.append(image.copy())
+                return dict(name='neutral', confidence=.9, probabilities=scores(6).tolist(),
+                            expression_backend='quality_tta_fp32')
+
+        quality = QualityPredictor()
+        runner = FastVideoRunner(pipeline, detect_interval=1, expression_predictor=quality,
+                                 track_reset_gap=2.5)
+        previous_calls = len(pipeline.classified)
+        for i in range(5):
+            _, info = runner.process_frame(rgb, i, timestamp=i * .9)
+        self.assertEqual(len(pipeline.classified), previous_calls)
+        self.assertEqual(quality.asserted_source, 'anonymized_only')
+        self.assertEqual(len(quality.inputs), 5)
+        self.assertTrue(all(image.mean() > 150 for image in quality.inputs))
+        self.assertEqual(info['expression'], 'neutral')
+        self.assertEqual(info['expression_backend'], 'quality_tta_fp32')
+        with patch.object(pipeline, '_machine_runtime_candidate', side_effect=AnonymizationUnavailable('no resources')):
+            runner.process_frame(rgb, 5, timestamp=4.6)
+        self.assertEqual(len(quality.inputs), 5)
 
     def test_large_face_track_jump_is_not_same_track(self):
         from expression_deid.video_demo import FastVideoRunner

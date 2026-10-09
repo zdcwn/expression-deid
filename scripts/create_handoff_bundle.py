@@ -35,6 +35,8 @@ DATASETS = [
 MODELS = [
     ("anonymizer_adversarial_v1.pt", "models/anonymizer_adversarial_v1.pt", "required", "fast machine-targeted local anonymization"),
     ("expression_realtime_stable.pt", "models/expression_realtime_stable.pt", "required-for-current-video", "2026-10-09 audit-validated anonymous-domain and consistency fine-tuned realtime expression classifier"),
+    ("expression_video_quality.ts.pt", "models/expression_video_quality.ts.pt", "required-for-accuracy-video", "FP32 TorchScript quality-priority video expression classifier; anonymous input only"),
+    ("expression_video_quality.json", "models/expression_video_quality.json", "required-for-accuracy-video", "quality model contract, calibration, provenance and SHA-256"),
     ("expression_machine_selector_texture.pt", "models/expression_machine_selector_texture.pt", "required", "expression classifier used after anonymization"),
     ("ganonymization_50.ckpt", "models/ganonymization_50.ckpt", "required-for-visual-output", "landmark-only human-facing display anonymizer"),
     ("face_landmarker.task", "models/face_landmarker.task", "required-for-visual-output", "MediaPipe dense landmark asset"),

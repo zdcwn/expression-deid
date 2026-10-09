@@ -394,3 +394,11 @@ Git 保留代码、精简结果、报告和小路径 ZIP，不提交匿名训练
 | `tests\test_models.py` | 143 | `da301239a23b1683` | pass |
 | `tests\test_preprocess.py` | 119 | `3c184459e95583f5` | pass |
 | `tests\test_temporal.py` | 224 | `1b52b02ca8bbc5ec` | pass |
+
+## 2026-10-09 质量优先视频模型补充复核
+
+本次没有把旧快速模型的分数直接当作新模型分数。使用匿名缓存 `anonymous_realtime_v3_cache.npz` 的全部 RAF 训练图扩展训练，原验证划分保持不变；原始图没有进入质量分类器。新资产是 `models/expression_video_quality.ts.pt` 和同名 JSON 清单，输入契约为 `100x100 uint8` 匿名灰度图，FP32 260x260 ImageNet 归一化，原图路径在接口层直接拒绝。
+
+质量优先候选的 RAF 验证集（3068 张）准确率为 **78.39%**，中性召回 **81.91%**，中性被判为悲伤或愤怒 **58/680**；KMU 尾帧为 **99.55%**，PPB 未见参与者中性测试为 **100%（35/35）**。这些是离线匿名集结果，不能替代本人摄像头或真实道路准确率。真实 Qt worker 80 帧交付、编码/解码、停止和窗口关闭检查通过；质量模式实际分析约 **5.5 FPS**，因此当前桌面端优先准确率，不再承诺 24 FPS。
+
+官方外部表征来自 EmotiEffLib 固定提交，来源、许可证和 SHA-256 见 `licenses/expression-quality-NOTICE.md` 与 `models/expression_video_quality.json`。模型筛选保留各类别最低召回约束、匿名验证集校准和 PPB 人员隔离；没有用用户截图训练。用户两张中性回归截图在当前候选上分别输出中性 0.338、0.378，低于持续确认阈值，界面显示“不确定”，这说明仍需要更多真实座舱中性/非中性标注视频才能继续提高可靠性。

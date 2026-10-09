@@ -29,6 +29,7 @@ from expression_deid.app import _image_frame, _pick_checkpoint, _resize_rgb, bui
 from expression_deid.config import KMU_ALIGNED_DIR, ROOT
 from expression_deid.inference import ExpressionDeidentifier
 from expression_deid.video_demo import FastVideoRunner
+from expression_deid.expression_quality import QualityExpressionPredictor
 from expression_deid.labels import EXPRESSION_ZH
 from expression_deid.desktop_design import (
     AccuracyBars, ConfidenceMeter, FpsTrace, MediaCard, MetricCard,
@@ -248,7 +249,7 @@ class VideoWorker(QThread):
 
     def run(self):
         capture = None
-        pipeline = display_pipeline = None
+        pipeline = display_pipeline = quality_predictor = None
         try:
             # Match the web visual output while keeping the realtime analysis
             # path responsive: the classifier pipeline stays on the fast local
@@ -259,11 +260,16 @@ class VideoWorker(QThread):
             if not self.running: return
             display_pipeline = build_pipeline(self.device, use_gan=True)
             if not self.running: return
+            quality_manifest = ROOT / 'models' / 'expression_video_quality.json'
+            if quality_manifest.is_file() and (ROOT / 'models' / 'expression_video_quality.ts.pt').is_file():
+                quality_predictor = QualityExpressionPredictor(self.device, manifest=quality_manifest)
             runner = FastVideoRunner(
                 pipeline,
-                detect_interval=5,
+                detect_interval=1 if quality_predictor is not None else 5,
                 display_pipeline=display_pipeline,
                 display_interval=15,
+                expression_predictor=quality_predictor,
+                track_reset_gap=2.5 if quality_predictor is not None else .75,
             )
             kind, value = self.source; capture = cv2.VideoCapture(int(value), cv2.CAP_DSHOW) if kind == "camera" else cv2.VideoCapture(str(value))
             if not capture.isOpened(): raise RuntimeError("无法打开摄像头或视频文件")

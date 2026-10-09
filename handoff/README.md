@@ -11,6 +11,7 @@
 - **桌面端**：`python -m expression_deid.desktop_ui --device cuda`，PySide6/Qt 三页界面，包含实验图片、实时视频/摄像头和整体模型表现。
 - **网页端**：`python -m expression_deid.web --device cuda`，是辅助检查入口，本次交接不依赖它。
 - **机器表情链路**：快速局部匿名化结果 → 表情模型；原图不会进入表情模型。
+- **准确优先视频模型**：若交接包包含 `models/expression_video_quality.ts.pt` 和同名 JSON 清单，桌面视频自动加载该匿名图质量模式（FP32 + 左右翻转 TTA）；清单缺失时才回退旧快速模型。训练依赖和导出步骤见 `requirements-quality-train.txt`、`scripts/train_video_quality.py`、`scripts/export_video_quality.py`。
 - **人眼展示链路**：桌面/网页展示使用 `models/ganonymization_50.ckpt` + `external_ganonymization/` 的 landmark-only 生成器。生成器只接收关键点图，不接收原始脸部像素。
 - **实时桌面视频**：机器链路每帧推理；视觉 GAN 每 15 帧刷新一次，再合成回当前灰度背景，保持实时性和视觉模型效果。
 - **身份模型**：只用于离线验收和实验图片诊断，不进入业务表情推理链路。
