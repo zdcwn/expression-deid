@@ -1,0 +1,10 @@
+{
+  "align_size": 256,
+  "gray": "rec601 luminance, png",
+  "pixel_norm": "not baked in; expression_deid/norm_stats.json",
+  "counts": {
+    "ok": 1100
+  },
+  "failures": [],
+  "review": []
+}

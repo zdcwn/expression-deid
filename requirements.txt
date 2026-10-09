@@ -1,0 +1,5 @@
+numpy>=1.26
+Pillow>=10
+onnxruntime>=1.16
+av>=14.0
+opencv-contrib-python==5.0.0.93

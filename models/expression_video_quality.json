@@ -1,0 +1,264 @@
+{
+  "schema": 1,
+  "expression_input_source": "anonymized_only",
+  "machine_privacy": {},
+  "class_names": [
+    "surprise",
+    "fear",
+    "disgust",
+    "happiness",
+    "sadness",
+    "anger",
+    "neutral"
+  ],
+  "preprocessing": "float_bilinear_260_imagenet_gray_v1",
+  "quality_weight": 0.75,
+  "quality_temperature": 2.0,
+  "final_temperature": 0.5426406264305115,
+  "compact_temperature": 0.9538748860359192,
+  "compact_mean": 0.481619,
+  "compact_std": 0.242606,
+  "quality_model": {
+    "file": "expression_video_quality.ts.pt",
+    "sha256": "b66bc11ec49f1340d457804dc6ddfb6403b577d4f92528ce85af31e0d664b4c2"
+  },
+  "compact_model": {
+    "file": "expression_realtime_stable.pt",
+    "sha256": "5a98c02d10439dd215cc4b6f59abf7bbbf174fd2df0396841b0551fd9c1a26ab"
+  },
+  "pretrained": {
+    "url": "https://raw.githubusercontent.com/sb-ai-lab/EmotiEffLib/520a051c64cd191521e5934655314e769a319684/models/affectnet_emotions/onnx/enet_b2_7.onnx",
+    "sha256": "7863032d8c0c0bc259aa0dd7b8ebf6b607af454e7a0ea82be2b37767914ecd0f",
+    "repository": "https://github.com/sb-ai-lab/EmotiEffLib"
+  },
+  "training_checkpoint_sha256": "819e78e191195cf40b8a8a2900297b84eb0072bb9411f270b414c89525cacc12",
+  "validation": {
+    "epoch": 2,
+    "quality_temperature": 2.0,
+    "quality_weight": 0.75,
+    "score": 0.8370146379044685,
+    "eligible": true,
+    "loss": 0.2056094567123288,
+    "metrics": {
+      "raf": {
+        "samples": 3068,
+        "accuracy": 0.7838983050847458,
+        "neutral_recall": 0.8191176470588235,
+        "neutral_as_sad_angry": 58,
+        "confusion": [
+          [
+            255,
+            7,
+            3,
+            15,
+            8,
+            7,
+            34
+          ],
+          [
+            10,
+            39,
+            1,
+            6,
+            11,
+            3,
+            4
+          ],
+          [
+            12,
+            1,
+            46,
+            21,
+            20,
+            17,
+            43
+          ],
+          [
+            19,
+            4,
+            8,
+            1065,
+            18,
+            8,
+            63
+          ],
+          [
+            16,
+            4,
+            13,
+            22,
+            336,
+            6,
+            81
+          ],
+          [
+            11,
+            3,
+            6,
+            9,
+            13,
+            107,
+            13
+          ],
+          [
+            36,
+            0,
+            10,
+            19,
+            55,
+            3,
+            557
+          ]
+        ]
+      },
+      "kmu": {
+        "samples": 220,
+        "accuracy": 0.9954545454545455,
+        "neutral_recall": null,
+        "neutral_as_sad_angry": 0,
+        "confusion": [
+          [
+            40,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            40,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            24,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            1,
+            0,
+            41,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            36,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            38,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ]
+      },
+      "ppb": {
+        "samples": 34,
+        "accuracy": 1.0,
+        "neutral_recall": 1.0,
+        "neutral_as_sad_angry": 0,
+        "confusion": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            34
+          ]
+        ]
+      }
+    },
+    "expression_input_source": "anonymized_only"
+  },
+  "export_max_abs_errors": [
+    0.0,
+    0.0,
+    0.0
+  ]
+}
