@@ -90,14 +90,6 @@ class QualityExpressionPredictor:
         gray = np.asarray(gray)
         if gray.ndim != 3 or gray.shape[1:] != (100, 100) or gray.dtype != np.uint8:
             raise ValueError('准确模式只接受匿名化后的 N×100×100 uint8 灰度人脸')
-        # The exported EfficientNet graph was traced for the two-view runtime
-        # call.  Do not silently feed a larger batch into a shape-specialized
-        # TorchScript graph; process it as independent runtime calls instead.
-        if len(gray) > 1:
-            return np.concatenate([
-                self.predict_anonymous_batch(image[None], input_source=input_source)
-                for image in gray
-            ], axis=0)
         with torch.inference_mode():
             images = torch.from_numpy(gray.copy()).to(device=self.device, dtype=torch.float32)[:, None] / 255
             views = torch.cat((images, images.flip(-1)), dim=0)
@@ -109,7 +101,13 @@ class QualityExpressionPredictor:
             b = self.compact((views - self.mean) / self.std).float()
             if a.shape != (2 * len(gray), 7) or b.shape != (2 * len(gray), 7) or not torch.isfinite(a).all() or not torch.isfinite(b).all():
                 raise RuntimeError('表情模型输出无效，停止分析当前帧')
-            p = self.weight * (a / self.quality_temperature).softmax(-1).reshape(len(gray), 2, 7).mean(1)
-            p += (1 - self.weight) * (b / self.compact_temperature).softmax(-1).reshape(len(gray), 2, 7).mean(1)
+            # `views` is laid out as all original faces followed by all
+            # mirrored faces.  Pair by face before averaging; reshaping the
+            # flat 2N rows as (N, 2, ...) would incorrectly pair face i with
+            # face i+1 for every batch larger than one.
+            qa = (a / self.quality_temperature).softmax(-1)
+            qb = (b / self.compact_temperature).softmax(-1)
+            p = self.weight * (qa[:len(gray)] + qa[len(gray):]) / 2
+            p += (1 - self.weight) * (qb[:len(gray)] + qb[len(gray):]) / 2
             p = (p.clamp_min(1e-12).log() / self.final_temperature).softmax(-1)
             return p.cpu().numpy()

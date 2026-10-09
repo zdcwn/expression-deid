@@ -14,7 +14,7 @@
   "preprocessing": "float_bilinear_260_imagenet_gray_v1",
   "quality_weight": 0.75,
   "quality_temperature": 2.0,
-  "final_temperature": 1.0,
+  "final_temperature": 0.5426406264305115,
   "compact_temperature": 0.9538748860359192,
   "compact_mean": 0.481619,
   "compact_std": 0.242606,

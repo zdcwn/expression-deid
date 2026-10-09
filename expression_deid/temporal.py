@@ -15,12 +15,15 @@ class TemporalExpressionFilter:
     it is not a vote percentage or an artificially increased score.
     """
 
-    def __init__(self, *, time_constant=0.16, min_confidence=0.50,
-                 min_margin=0.12, switch_seconds=0.20, initial_seconds=0.08,
-                 uncertain_seconds=0.50, reset_gap=0.75, min_observations=3):
+    def __init__(self, *, time_constant=0.30, min_confidence=0.50,
+                 min_margin=0.12, hold_confidence=0.30, hold_margin=0.03,
+                 switch_seconds=0.25, initial_seconds=0.10,
+                 uncertain_seconds=0.90, reset_gap=0.75, min_observations=2):
         self.time_constant = float(time_constant)
         self.min_confidence = float(min_confidence)
         self.min_margin = float(min_margin)
+        self.hold_confidence = float(hold_confidence)
+        self.hold_margin = float(hold_margin)
         self.switch_seconds = float(switch_seconds)
         self.initial_seconds = float(initial_seconds)
         self.uncertain_seconds = float(uncertain_seconds)
@@ -28,10 +31,13 @@ class TemporalExpressionFilter:
         self.min_observations = int(min_observations)
         if (not all(math.isfinite(v) for v in (self.time_constant, self.min_confidence,
                 self.min_margin, self.switch_seconds, self.initial_seconds,
-                self.uncertain_seconds, self.reset_gap))
+                self.uncertain_seconds, self.reset_gap,
+                self.hold_confidence, self.hold_margin))
                 or self.time_constant <= 0 or self.reset_gap <= 0
                 or min(self.switch_seconds, self.initial_seconds, self.uncertain_seconds) < 0
                 or not 0 < self.min_confidence <= 1 or not 0 <= self.min_margin <= 1
+                or not 0 < self.hold_confidence <= self.min_confidence
+                or not 0 <= self.hold_margin <= self.min_margin
                 or self.min_observations < 2):
             raise ValueError("Invalid temporal expression filter parameters")
         self.reset()
@@ -83,16 +89,29 @@ class TemporalExpressionFilter:
                 self.pending_label = self.pending_since = None
                 self.pending_count = 0
                 self.unsupported_since = None
+        elif best == self.label:
+            self.pending_label = self.pending_since = None
+            self.pending_count = 0
         else:
             self.pending_label = self.pending_since = None
             self.pending_count = 0
         if self.label is not None:
-            if supported and best == self.label:
+            # A confirmed label is held through a few weak/noisy frames.  A
+            # competing class still needs the strict entry gate above; it must
+            # not erase the last usable result while it is accumulating.
+            hold_best = int(self.probabilities.argmax()) == self.label
+            hold_supported = (hold_best
+                              and self.probabilities[self.label] >= self.hold_confidence
+                              and margin >= self.hold_margin)
+            competing_transition = self.pending_label is not None and self.pending_label != self.label
+            if (hold_supported or competing_transition):
                 self.unsupported_since = None
             elif self.unsupported_since is None:
                 self.unsupported_since = timestamp
             elif timestamp - self.unsupported_since >= self.uncertain_seconds:
                 self.label = None
+                self.pending_label = self.pending_since = None
+                self.pending_count = 0
                 self.unsupported_since = None
         return {
             "label": self.label,

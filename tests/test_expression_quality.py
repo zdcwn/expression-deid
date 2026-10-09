@@ -17,6 +17,12 @@ class FixedLogits(torch.nn.Module):
     def forward(self, x): return self.values[None].expand(len(x), -1)
 
 
+class SequenceLogits(torch.nn.Module):
+    def __init__(self, rows):
+        super().__init__(); self.register_buffer('rows', torch.tensor(rows, dtype=torch.float32))
+    def forward(self, x): return self.rows[:len(x)]
+
+
 class QualityExpressionTests(unittest.TestCase):
     def manifest(self, folder, **changes):
         asset=Path(folder)/'weights';asset.write_bytes(b'checked fixture')
@@ -83,6 +89,23 @@ class QualityExpressionTests(unittest.TestCase):
                 model=QualityExpressionPredictor(manifest=self.manifest(folder))
             with self.assertRaisesRegex(RuntimeError,'输出无效'):
                 model.predict_anonymous(np.zeros((100,100),np.uint8),input_source='anonymized_only')
+
+    def test_batch_pairs_each_face_with_its_mirror(self):
+        with tempfile.TemporaryDirectory() as folder:
+            with patch('torch.jit.load',return_value=FixedLogits([0]*7)), patch('expression_deid.expression_quality.load_checkpoint',return_value=(FixedLogits([0]*7),{})):
+                model=QualityExpressionPredictor(manifest=self.manifest(folder))
+            quality_rows=np.array([[3,0,0,0,0,0,0],[0,0,3,0,0,0,0],[0,0,0,0,0,3,0],[0,0,0,0,0,0,3]],dtype=np.float32)
+            compact_rows=np.array([[0,3,0,0,0,0,0],[0,0,0,3,0,0,0],[0,0,0,0,3,0,0],[0,0,0,0,0,0,3]],dtype=np.float32)
+            model.quality=SequenceLogits(quality_rows); model.compact=SequenceLogits(compact_rows)
+            images=np.stack([np.zeros((100,100),np.uint8),np.full((100,100),255,np.uint8)])
+            actual=model.predict_anonymous_batch(images,input_source='anonymized_only')
+            qa=torch.softmax(torch.tensor(quality_rows)/2,1).numpy()
+            qb=torch.softmax(torch.tensor(compact_rows),1).numpy()
+            expected=.5*(qa[:2]+qa[2:])/2 + .5*(qb[:2]+qb[2:])/2
+            expected=np.exp(np.log(expected)/1); expected/=expected.sum(1,keepdims=True)
+            np.testing.assert_allclose(actual,expected,atol=1e-7)
+            wrong=.5*(qa[::2]+qa[1::2])/2 + .5*(qb[::2]+qb[1::2])/2
+            self.assertGreater(np.abs(actual-wrong).max(),.05)
 
     def test_training_rejects_raw_cache_and_partition_leakage(self):
         import importlib.util

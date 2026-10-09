@@ -67,6 +67,25 @@ class TemporalExpressionTest(unittest.TestCase):
         self.assertLess(result['confidence'], 0.60)
         self.assertAlmostEqual(sum(result['probabilities']), 1)
 
+    def test_low_rate_weak_frames_hold_confirmed_label(self):
+        filt = TemporalExpressionFilter()
+        for i in range(4):
+            result = filt.update(scores(6, .72), i / 5)
+        self.assertEqual(result['label'], 6)
+        for i in range(4, 10):
+            result = filt.update(scores(6, .36), i / 5)
+            self.assertEqual(result['label'], 6)
+            self.assertNotEqual(result['state'], 'uncertain')
+
+    def test_uniform_frames_eventually_clear_held_label(self):
+        filt = TemporalExpressionFilter()
+        for i in range(5):
+            filt.update(scores(6, .72), i / 5)
+        for i in range(5, 15):
+            result = filt.update(np.full(7, 1 / 7), i / 5)
+        self.assertIsNone(result['label'])
+        self.assertEqual(result['state'], 'uncertain')
+
     def test_invalid_observation_is_rejected(self):
         filt = TemporalExpressionFilter()
         for values in (np.full(7, np.nan), [-1, 2], [0, 0], [[1, 0]]):
