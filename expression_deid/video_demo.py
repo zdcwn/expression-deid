@@ -4,7 +4,7 @@ The runner decodes a video with PyAV, converts every frame to grayscale, edits
 only local eye/nose/mouth regions, and sends the anonymized aligned face to the
 expression model.  It writes a side-by-side MP4 and a JSONL telemetry file so
 the original frame, anonymized frame, expression and confidence can be checked
-without relying on a browser UI.
+from the local Python desktop runtime.
 """
 
 from __future__ import annotations
@@ -54,10 +54,9 @@ class FastVideoRunner:
         track_reset_gap: float = .75,
     ):
         self.pipeline = pipeline
-        # The optional display pipeline lets a desktop client use the same
-        # human-facing GAN without sending that branch into the
-        # expression classifier.  Existing callers keep the original single
-        # pipeline behavior when this is omitted.
+        # The optional display pipeline updates the desktop preview while the
+        # classifier continues to receive only the anonymized face. Existing
+        # callers keep the original single pipeline behavior when omitted.
         self.display_pipeline = display_pipeline or pipeline
         self.display_interval = max(1, int(display_interval))
         self.detect_interval = max(1, int(detect_interval))
@@ -271,7 +270,7 @@ def _stream_pipelines(device, expression_checkpoint=None, gan_checkpoint=None, g
             display = ExpressionDeidentifier(
                 ROOT/'models/anonymizer_adversarial_v1.pt',
                 ROOT/'models/expression_machine_selector_texture.pt', device=str(pipeline.device),
-                fast_mode=True, privacy_selection=False, ganonymization_checkpoint=gan_checkpoint,
+                fast_mode=True, ganonymization_checkpoint=gan_checkpoint,
                 ganonymization_repo=gan_repo or ROOT/'external_ganonymization')
         else:
             display = build_pipeline(device, use_gan=True)

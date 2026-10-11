@@ -27,7 +27,8 @@ git lfs pull
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
+python -m pip install -r requirements-train.txt
+python -m pip install -r requirements-anonymization.txt
 python -m pip install -r requirements-ui.txt
 python -m expression_deid.desktop_ui --device cuda
 ```
@@ -56,7 +57,7 @@ python -m unittest discover -s tests -p "test_*.py" -q
 | `models/face_landmarker.task` | 视觉匿名化的密集关键点 |
 | `models/ganonymization_50.ckpt` | 质量模式的人眼展示匿名化 GAN，使用 Git LFS |
 
-旧的 `.pt`、身份模型、SFace 模型和训练候选权重留在开发机或外部模型包，不参与主分支运行。`external_ganonymization/` 只保留推理所需的 MIT 许可 `pix2pix.py` 和许可证文件。
+旧的身份模型、训练候选权重和实验中间产物留在开发机或外部模型包，不参与主分支运行。`external_ganonymization/` 只保留推理所需的 MIT 许可 `pix2pix.py` 和许可证文件。
 
 质量模式的表情分类器只接受已经匿名化的 `100×100` 灰度脸；输入契约和权重哈希记录在 `models/expression_video_quality.json`。
 

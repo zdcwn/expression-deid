@@ -24,8 +24,7 @@ def evaluate_joint(
     reference_strength: float = 1.0, fast_model_only: bool = True,
     ganonymization_checkpoint: str | None = None,
     ganonymization_repo: str | None = None, generated_strength: float = 1.0,
-    geometry_strength: float = 1.0, identity_gallery_size: int = 1680,
-    privacy_selection: bool = True,
+    geometry_strength: float = 1.0,
 ) -> dict:
     pipeline = ExpressionDeidentifier(
         anonymizer_checkpoint, expression_checkpoint, identity_checkpoint,
@@ -36,8 +35,6 @@ def evaluate_joint(
         ganonymization_repo=ganonymization_repo,
         generated_strength=generated_strength,
         geometry_strength=geometry_strength,
-        identity_gallery_size=identity_gallery_size,
-        privacy_selection=privacy_selection,
     )
     try:
         person_to_id = {}
@@ -73,33 +70,15 @@ def evaluate_joint(
                 "geometry_strength": float(geometry_strength),
                 "learned_anonymizer": bool(result.get("learned_anonymizer", False)),
             }
-            selection = result.get("privacy_selection")
-            if isinstance(selection, dict):
-                row["privacy_selection"] = selection
             if "identity_cosine" in result:
                 row.update({
                     "identity_cosine": float(result["identity_cosine"]),
-                    "sface_cosine": (float(result["sface_cosine"]) if result.get("sface_cosine") is not None else None),
                     "identity_prediction_changed": bool(result["identity_prediction_changed"]),
                     "identity_region": result.get("identity_region", "face_only_ellipse"),
                     "identity_original_confidence": float(result["identity_original"]["confidence"]),
                     "identity_anonymized_confidence": float(result["identity_anonymized"]["confidence"]),
                     "identity_confidence_drop": float(result["identity_original"]["confidence"] - result["identity_anonymized"]["confidence"]),
                 })
-                for key in (
-                    "gallery_size", "gallery_distractor_count", "gallery_source_rank",
-                    "gallery_match_original", "gallery_top_identity", "gallery_confidence",
-                    "gallery_source_cosine", "gallery_best_distractor_cosine", "gallery_margin",
-                    "display_gallery_size", "display_gallery_distractor_count",
-                    "display_gallery_source_rank", "display_gallery_match_original",
-                    "display_gallery_top_identity", "display_gallery_confidence",
-                    "display_gallery_source_cosine", "display_gallery_best_distractor_cosine",
-                    "display_gallery_margin",
-                ):
-                    if key in result:
-                        row[key] = result[key]
-                if result.get("display_sface_cosine") is not None:
-                    row["display_sface_cosine"] = float(result["display_sface_cosine"])
                 if record["person"] in person_to_id:
                     expected_id = int(person_to_id[record["person"]])
                     row["identity_original_correct"] = int(result["identity_original"]["label"]) == expected_id
@@ -123,7 +102,7 @@ def evaluate_joint(
             "anonymizer": asset(anonymizer_checkpoint), "expression": asset(expression_checkpoint),
             "identity": asset(identity_checkpoint), "gan": asset(ganonymization_checkpoint),
             "expression_ensemble_size": len(pipeline.expression_models), "fast_model_only": fast_model_only,
-            "machine_privacy": pipeline.machine_privacy, "privacy_selection": privacy_selection,
+            "machine_privacy": pipeline.machine_privacy,
             "generated_strength": generated_strength, "geometry_strength": geometry_strength,
             "diagnostic_errors": pipeline.diagnostic_errors, "device": str(pipeline.device),
             "dataset_root": str(Path(root).resolve()),
@@ -190,49 +169,6 @@ def summarize(rows: list[dict]) -> dict:
                 "identity_original_accuracy": float(np.mean([row["identity_original_correct"] for row in identity_rows])),
                 "identity_anonymized_accuracy": float(np.mean([row["identity_anonymized_correct"] for row in identity_rows])),
             })
-        sface_rows = [row for row in identity_rows if row.get("sface_cosine") is not None]
-        if sface_rows:
-            summary.update({
-                "sface_pairs": len(sface_rows),
-                "sface_mean_cosine": float(np.mean([row["sface_cosine"] for row in sface_rows])),
-                "sface_median_cosine": float(np.median([row["sface_cosine"] for row in sface_rows])),
-            })
-        display_sface_rows = [row for row in identity_rows if row.get("display_sface_cosine") is not None]
-        if display_sface_rows:
-            summary.update({
-                "display_sface_pairs": len(display_sface_rows),
-                "display_sface_mean_cosine": float(np.mean([row["display_sface_cosine"] for row in display_sface_rows])),
-                "display_sface_median_cosine": float(np.median([row["display_sface_cosine"] for row in display_sface_rows])),
-            })
-        gallery_rows = [row for row in identity_rows if "gallery_match_original" in row]
-        if gallery_rows:
-            summary.update({
-                "gallery_pairs": len(gallery_rows),
-                "gallery_size": int(gallery_rows[0]["gallery_size"]),
-                "gallery_original_match_rate": float(np.mean([row["gallery_match_original"] for row in gallery_rows])),
-                "gallery_mean_confidence": float(np.mean([row["gallery_confidence"] for row in gallery_rows])),
-                "gallery_mean_source_rank": float(np.mean([row["gallery_source_rank"] for row in gallery_rows])),
-                "gallery_mean_margin": float(np.mean([row["gallery_margin"] for row in gallery_rows])),
-            })
-        display_gallery_rows = [
-            row for row in identity_rows if "display_gallery_match_original" in row
-        ]
-        if display_gallery_rows:
-            summary.update({
-                "display_gallery_pairs": len(display_gallery_rows),
-                "display_gallery_size": int(display_gallery_rows[0]["display_gallery_size"]),
-                "display_gallery_match_rate": float(np.mean([row["display_gallery_match_original"] for row in display_gallery_rows])),
-                "display_gallery_mean_confidence": float(np.mean([row["display_gallery_confidence"] for row in display_gallery_rows])),
-                "display_gallery_mean_source_rank": float(np.mean([row["display_gallery_source_rank"] for row in display_gallery_rows])),
-                "display_gallery_mean_margin": float(np.mean([row["display_gallery_margin"] for row in display_gallery_rows])),
-            })
-        selection_rows = [row["privacy_selection"] for row in identity_rows if isinstance(row.get("privacy_selection"), dict)]
-        if selection_rows:
-            summary.update({
-                "privacy_selection_used_rate": float(np.mean([bool(row.get("used", False)) for row in selection_rows])),
-                "privacy_mean_candidate_count": float(np.mean([row.get("candidate_count", 1) for row in selection_rows])),
-                "privacy_mean_selected_index": float(np.mean([row.get("selected_index", 0) for row in selection_rows])),
-            })
     return summary
 
 
@@ -261,8 +197,4 @@ def build_parser(subparsers):
                    help="landmark-only 生成内脸的覆盖比例，越高匿名越强")
     p.add_argument("--geometry-strength", type=float, default=1.0,
                    help="只改变水平身份比例的关键点变形强度")
-    p.add_argument("--identity-gallery-size", type=int, default=1680,
-                   help="LFW 身份库中使用的干扰身份数；默认使用全部 1680 人")
-    p.add_argument("--disable-privacy-selection", action="store_true",
-                   help="实时速度模式：跳过逐帧 SFace 候选筛选，使用固定机器匿名候选")
-    p.set_defaults(func=lambda a: evaluate_joint(anonymizer_checkpoint=a.anonymizer_checkpoint, expression_checkpoint=a.expression_checkpoint, identity_checkpoint=a.identity_checkpoint, root=a.root, output_dir=a.output_dir, limit=a.limit, device=a.device, include_review=a.include_review, prototype_strength=a.prototype_strength, reference_strength=a.reference_strength, fast_model_only=a.fast_model_only, ganonymization_checkpoint=a.ganonymization_checkpoint, ganonymization_repo=a.ganonymization_repo, generated_strength=a.generated_strength, geometry_strength=a.geometry_strength, identity_gallery_size=a.identity_gallery_size, privacy_selection=not a.disable_privacy_selection))
+    p.set_defaults(func=lambda a: evaluate_joint(anonymizer_checkpoint=a.anonymizer_checkpoint, expression_checkpoint=a.expression_checkpoint, identity_checkpoint=a.identity_checkpoint, root=a.root, output_dir=a.output_dir, limit=a.limit, device=a.device, include_review=a.include_review, prototype_strength=a.prototype_strength, reference_strength=a.reference_strength, fast_model_only=a.fast_model_only, ganonymization_checkpoint=a.ganonymization_checkpoint, ganonymization_repo=a.ganonymization_repo, generated_strength=a.generated_strength, geometry_strength=a.geometry_strength))

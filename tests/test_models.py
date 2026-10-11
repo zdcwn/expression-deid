@@ -120,12 +120,12 @@ class ModelTest(unittest.TestCase):
         self.assertIn("predict_expression(edited100", source)
         self.assertNotIn("predict_expression(gray", source)
 
-    def test_identity_candidate_selection_is_before_expression_inference(self):
-        source = inspect.getsource(ExpressionDeidentifier.select_anonymized_candidate)
-        self.assertIn("predict_sface_similarity", source)
-        self.assertNotIn("predict_expression", source)
-        process_source = inspect.getsource(ExpressionDeidentifier.process)
-        self.assertIn('"privacy_selection"', process_source)
+    def test_project_identity_diagnostic_is_separate_from_expression_inference(self):
+        source = inspect.getsource(ExpressionDeidentifier.process)
+        self.assertIn('"expression_input_source": "anonymized_only"', source)
+        self.assertIn('self.predict_identity(expression_input, aligned=True)', source)
+        self.assertNotIn("sface", source.lower())
+        self.assertNotIn("identity_gallery", source)
 
     def test_ppb_split_keeps_participants_disjoint_and_json_safe(self):
         class Fake:

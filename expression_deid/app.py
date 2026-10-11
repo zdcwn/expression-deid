@@ -49,14 +49,9 @@ def build_pipeline(device: str, *, use_gan: bool = True, expression_checkpoint: 
     gan_checkpoint = ROOT / "models/ganonymization_50.ckpt"
     gan_repo = ROOT / "external_ganonymization"
     use_gan = bool(use_gan and gan_checkpoint.is_file() and gan_repo.is_dir())
-    candidates = (
-        ROOT / "models/expression_machine_selector_texture.pt",
-        ROOT / "models/expression_gan_strength100.pt",
-        ROOT / "models/expression_gan_innerface.pt",
-        ROOT / "models/expression_gan_final.pt",
-        ROOT / "models/expression_anonymized.pt",
-        ROOT / "models/expression.pt",
-    )
+    # Keep fallback selection inside the published runtime set.  Historical
+    # GAN-adapted checkpoints are intentionally not part of the main branch.
+    candidates = (ROOT / "models/expression_machine_selector_texture.pt",)
     if not use_gan:
         candidates = (ROOT / "models/expression_realtime_stable.pt", *candidates)
     expression = Path(expression_checkpoint) if expression_checkpoint else _pick_checkpoint(candidates)
@@ -75,7 +70,6 @@ def build_pipeline(device: str, *, use_gan: bool = True, expression_checkpoint: 
         fast_mode=True,
         ganonymization_checkpoint=gan_checkpoint if use_gan else None,
         ganonymization_repo=gan_repo if use_gan else None,
-        privacy_selection=False,
     )
     # Warm the expression model before opening the window.
     pipeline.predict_expression(np.zeros((100, 100), dtype=np.uint8), aligned=True)
@@ -135,7 +129,11 @@ def _load_examples() -> list[tuple[str, Path]]:
 
 
 def _image_frame(path: Path) -> np.ndarray:
-    bgr = cv2.imread(str(path), cv2.IMREAD_COLOR)
+    # ``cv2.imread`` can fail on Windows when the project path contains
+    # non-ASCII characters.  Decode the bytes explicitly so the desktop
+    # examples work from any user profile and checkout location.
+    encoded = np.fromfile(str(path), dtype=np.uint8)
+    bgr = cv2.imdecode(encoded, cv2.IMREAD_COLOR) if encoded.size else None
     if bgr is None:
         raise RuntimeError(f"无法读取图片：{path}")
     return cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)

@@ -1,20 +1,20 @@
-# 当前运行模型
+# 当前模型资产
 
-主分支只保留桌面端当前会加载的模型。旧训练候选、身份/SFace 诊断权重和实验中间权重不提交。
+主分支只保留桌面端当前会加载的运行模型和质量模式组件。旧训练候选、身份诊断权重、身份图库和实验中间权重不提交。
 
-| 文件 | 运行位置 | 说明 |
-| --- | --- | --- |
-| `anonymizer_adversarial_v1.pt` | 高速/质量匿名链路 | 局部面部匿名化残差 |
-| `expression_realtime_stable.pt` | 高速视频、质量视频的 compact 分支 | 匿名灰度图表情识别 |
-| `expression_machine_selector_texture.pt` | 图片实验 | 匿名图质量模式表情识别 |
-| `expression_video_quality.ts.pt` | 质量视频 | FP32 质量分类器 |
-| `expression_video_quality.json` | 质量视频 | 类别、预处理、温度和 SHA-256 契约 |
-| `face_detection_yunet_2023mar.onnx` | 原始视频检测 | YuNet 人脸检测 |
-| `face_landmarker.task` | 质量模式展示 | MediaPipe 密集关键点 |
-| `ganonymization_50.ckpt` | 质量模式展示 | landmark-only GAN，Git LFS 文件 |
+| 文件 | 用途 |
+| --- | --- |
+| `anonymizer_adversarial_v1.pt` | 局部人脸匿名化残差 |
+| `expression_realtime_stable.pt` | 高速视频的匿名图表情识别 |
+| `expression_machine_selector_texture.pt` | 图片实验和质量预览的表情识别 |
+| `expression_video_quality.ts.pt` | FP32 质量表情识别 |
+| `expression_video_quality.json` | 质量模型输入、类别和 SHA-256 契约 |
+| `face_detection_yunet_2023mar.onnx` | YuNet 人脸检测 |
+| `face_landmarker.task` | 质量模式面部关键点 |
+| `ganonymization_50.ckpt` | 关键点条件匿名化组件，使用 Git LFS |
 
-质量表情模型的输入必须是匿名化后的 `100×100` 灰度 `uint8` 图像。原始图像、原图表情标签和展示分支都不能进入该分类器。
+质量表情模型的输入必须是匿名化后的 `100×100` 灰度图，运行结果会带有 `expression_input_source=anonymized_only`。原始图像不能直接进入表情分类器。
 
-GAN 只接收关键点条件图，原始脸部像素不进入生成器。删除 GAN/LFS 资产后，高速模式仍可运行；质量模式会自动回退到局部编辑显示。
+质量模式需要 GAN 和关键点资产来生成展示预览；缺少这些可选组件时，高速局部编辑路径仍可运行。替换运行模型前，先更新输入契约和 SHA-256，然后运行编译、单元测试和桌面检查。
 
-训练过程产生的 `.pt`、`.pth`、`.onnx`、`.ckpt` 默认不应直接加入 Git。需要替换运行模型时，先更新输入契约、SHA-256 和本地检查，再单独提交经过验证的当前资产。
+训练过程产生的 `.pt`、`.pth`、`.onnx`、`.ckpt` 默认留在本地模型目录。需要替换当前资产时，应先完成数据集验证，再单独提交经过核对的文件。

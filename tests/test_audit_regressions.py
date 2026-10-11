@@ -48,19 +48,6 @@ class AuditRegressions(unittest.TestCase):
         with self.assertRaises(ValueError):
             tensor_from_input(np.zeros((1, 3, 100, 100)))
 
-    def test_gallery_relocated_legacy_and_relative_paths(self):
-        from expression_deid.identity_gallery import SFaceGallery
-        class Recognizer:
-            def feature(self, image):
-                return np.array([[1, 2, 3]], dtype=np.float32)
-        with tempfile.TemporaryDirectory() as folder:
-            root = Path(folder)
-            Image.fromarray(np.full((100, 100), 90, dtype=np.uint8)).save(root / 'person.jpg')
-            for path in ('person.jpg', r'Z:\old-machine\datasets\lfw-gallery\person.jpg'):
-                (root / 'manifest.jsonl').write_text(json.dumps({'identity': 'person', 'path': path}) + '\n')
-                gallery = SFaceGallery(root, Recognizer(), max_identities=1)
-                self.assertEqual(gallery.embeddings.shape, (1, 3))
-
     def test_mixed_missing_evaluation_labels(self):
         from expression_deid.evaluate import summarize
         row = dict(true_expression=6, anonymized_expression=6, expression_anonymized_correct=True,

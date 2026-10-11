@@ -63,7 +63,7 @@ def main():
     assert worker is not None
     loop=QEventLoop(); worker.error.connect(errors.append); worker.finished.connect(loop.quit)
     cutoff=QTimer(); cutoff.setSingleShot(True); cutoff.timeout.connect(worker.requestInterruption); cutoff.start(90000)
-    loop.exec(); cutoff.stop(); assert worker.wait(10000) and not errors
+    loop.exec(); cutoff.stop(); assert worker.wait(10000) and not errors, (errors, len(page.results), len(page.items))
     assert len(page.results)==len(page.items)>0 and page.run_button.isEnabled()
     for payload,_,_,_ in page.results.values():
         assert payload['result']['expression_input_source']=='anonymized_only'

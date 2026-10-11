@@ -22,19 +22,15 @@ class AnonymizationUnavailable(RuntimeError):
 
 
 class ExpressionDeidentifier:
-    # Canonical aligned-face region used only by the identity diagnostics.
+    # Canonical aligned-face region used only by the project identity model.
     # Hair, cabin background and the outer image corners are excluded from
     # both the source and anonymized comparison.
     FACE_DIAGNOSTIC_BOX = (12, 12, 88, 100)
-    DEFAULT_IDENTITY_GALLERY_SIZE = 1680
-
     def __init__(self, anonymizer_checkpoint, expression_checkpoint, identity_checkpoint=None,
                  device="cpu", auto_align=True, prototype_strength=0.60,
                  reference_strength=1.0, fast_mode=False,
                  ganonymization_checkpoint=None, ganonymization_repo=None,
-                 generated_strength=1.0, geometry_strength=1.0,
-                 identity_gallery_size=DEFAULT_IDENTITY_GALLERY_SIZE,
-                 privacy_candidates=6, privacy_selection=True):
+                 generated_strength=1.0, geometry_strength=1.0):
         torch, _, _ = require_torch()
         if str(device) == 'auto':
             device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -87,43 +83,6 @@ class ExpressionDeidentifier:
                 raise ValueError("identity_checkpoint 不是身份模型检查点")
             if self.fast_mode and self.device.type == "cuda":
                 self.identity_model.half()
-        # The old closed-set identity classifier is useful for regression
-        # checks, but it is trained on the same people as KMU validation and
-        # can memorize hair/background cues.  SFace supplies a face-only
-        # verifier for the privacy metric without touching the expression
-        # inference path.
-        # Realtime/video callers do not load an identity checkpoint and should
-        # not pay the startup cost of SFace plus the 1680-person gallery.  The
-        # still-image/evaluation path passes identity_checkpoint explicitly and
-        # keeps the full diagnostic verifier.
-        self.sface_model = None
-        if identity_checkpoint:
-            try:
-                import cv2
-                sface_path = ROOT / "models" / "face_recognition_sface_2021dec.onnx"
-                if sface_path.is_file():
-                    self.sface_model = cv2.FaceRecognizerSF_create(str(sface_path), "")
-                else:
-                    self.diagnostic_errors.append(f'SFace 权重不存在: {sface_path}')
-            except Exception as exc:
-                self.diagnostic_errors.append(f'SFace 加载失败: {exc}')
-                self.sface_model = None
-        self.identity_gallery = None
-        self.identity_gallery_size = max(1, int(identity_gallery_size))
-        if self.sface_model is not None:
-            gallery_root = ROOT / "datasets" / "lfw-gallery"
-            if gallery_root.is_dir():
-                try:
-                    from expression_deid.identity_gallery import SFaceGallery
-                    self.identity_gallery = SFaceGallery(
-                        gallery_root, self.sface_model,
-                        max_identities=self.identity_gallery_size,
-                    )
-                except (OSError, ValueError, RuntimeError) as exc:
-                    self.diagnostic_errors.append(f'身份图库加载失败: {exc}')
-                    self.identity_gallery = None
-            else:
-                self.diagnostic_errors.append(f'身份图库目录不存在: {gallery_root}')
         self.stats = load_stats()
         self.auto_align = bool(auto_align)
         self.detector = None
@@ -137,12 +96,6 @@ class ExpressionDeidentifier:
         # a runtime parameter lets evaluation select the strongest privacy
         # level that still preserves expression geometry.
         self.generated_strength = float(np.clip(generated_strength, 0.0, 1.0))
-        self.privacy_candidates = max(1, int(privacy_candidates))
-        self.privacy_selection = bool(privacy_selection)
-        self._last_privacy_selection = {
-            "used": False, "candidate_count": 1, "selected_index": 0,
-            "sface_scores": [],
-        }
         # Reference-face replacement is intentionally disabled.  It changes
         # the whole identity image and can also change the background when a
         # caller uploads a full frame.  Anonymization below is a residual edit
@@ -548,29 +501,6 @@ class ExpressionDeidentifier:
             tensor = tensor.half()
         return tensor
 
-    def _privacy_candidate_specs(self):
-        """Return bounded geometry/coverage variants for identity-aware selection."""
-        count = max(1, int(self.privacy_candidates))
-        base_geometry = float(self.ganonymization_backend.geometry_strength) if self.ganonymization_backend is not None else 0.0
-        base_generated = float(self.generated_strength)
-        if count == 1 or self.ganonymization_backend is None:
-            return [(base_geometry, base_generated, 0)]
-        # Keep the normal candidate first for expression quality, then add
-        # deliberately stronger landmark-only identity edits.  The selected
-        # frame is still scored by SFace before expression inference, so a
-        # stronger candidate is used only when it lowers identity similarity.
-        geometry = [
-            base_geometry,
-            max(base_geometry, 1.20),
-            max(base_geometry, 1.40),
-            max(base_geometry, 1.60),
-            max(base_geometry, 1.80),
-            max(base_geometry, 2.00),
-        ]
-        generated = [base_generated] + [max(0.92, base_generated)] * 5
-        profiles = [0, 1, 2, 3, 4, 5]
-        return list(zip(geometry[:count], generated[:count], profiles[:count]))
-
     def _learned_component_edit(self, image):
         """Apply the identity-adversarial residual inside the face oval."""
         if not self.learned_anonymizer_enabled:
@@ -597,8 +527,8 @@ class ExpressionDeidentifier:
         The residual is restricted to cheeks, forehead and chin.  Eye/mouth
         apertures and all geometry remain source-derived, so this is a texture
         perturbation rather than a replacement face or an expression label
-        lookup.  Different deterministic variants give the privacy selector
-        additional black-box candidates for the SFace score.
+        lookup.  The deterministic variant keeps the runtime result stable
+        across adjacent video frames.
         """
         image = cls._resize(np.asarray(image, dtype=np.uint8)).astype(np.float32)
         yy, xx = np.mgrid[0:100, 0:100]
@@ -622,7 +552,7 @@ class ExpressionDeidentifier:
         return np.clip(np.rint(output), 0, 255).astype(np.uint8)
 
     def _machine_runtime_candidate(self, aligned_gray, variant=3):
-        """Fast machine-private candidate without per-frame SFace screening."""
+        """Fast machine-private candidate used before expression inference."""
         if self.ganonymization_backend is None:
             candidate = self._learned_component_edit(
                 self._component_anonymize(
@@ -695,55 +625,6 @@ class ExpressionDeidentifier:
             edited += texture * (np.sin(xx*.27+yy*.13) + np.cos(xx*.15-yy*.22)) / 2
         return np.clip(np.rint(edited), 0, 255).astype(np.uint8)
 
-    def select_anonymized_candidate(self, aligned_gray, reference_gray=None):
-        """Generate local anonymized candidates and keep the least similar face.
-
-        ``reference_gray`` is used only by the identity diagnostic (SFace).  The
-        expression classifier is called later by the caller, exactly once, on
-        the selected anonymized result.
-        """
-        if self.ganonymization_backend is None:
-            selected = self._learned_component_edit(self._component_anonymize(aligned_gray))
-            self._last_privacy_selection = {
-                "used": False, "candidate_count": 1, "selected_index": 0,
-                "sface_scores": [],
-            }
-            self._last_anonymized_aligned = np.asarray(selected, dtype=np.uint8)
-            return selected
-        backend_geometry = float(self.ganonymization_backend.geometry_strength)
-        backend_profile = int(self.ganonymization_backend.geometry_profile)
-        source_generated = float(self.generated_strength)
-        candidates = []
-        scores = []
-        try:
-            for geometry_strength, generated_strength, geometry_profile in self._privacy_candidate_specs():
-                self.ganonymization_backend.geometry_strength = float(geometry_strength)
-                self.ganonymization_backend.geometry_profile = int(geometry_profile)
-                self.generated_strength = float(generated_strength)
-                candidate = self._generated_component_edit(aligned_gray)
-                candidate = self._learned_component_edit(candidate)
-                candidate = self._machine_texture_residual(candidate, len(candidates))
-                candidates.append(np.asarray(candidate, dtype=np.uint8))
-                score = None
-                if reference_gray is not None and self.sface_model is not None:
-                    score = self.predict_sface_similarity(reference_gray, candidate)
-                scores.append(score)
-        finally:
-            self.ganonymization_backend.geometry_strength = backend_geometry
-            self.ganonymization_backend.geometry_profile = backend_profile
-            self.generated_strength = source_generated
-        valid_scores = [float(value) if value is not None and np.isfinite(value) else np.inf for value in scores]
-        selected_index = int(np.argmin(valid_scores)) if candidates else 0
-        selected = candidates[selected_index]
-        self._last_privacy_selection = {
-            "used": bool(any(np.isfinite(value) for value in valid_scores)),
-            "candidate_count": len(candidates),
-            "selected_index": selected_index,
-            "sface_scores": [None if not np.isfinite(value) else float(value) for value in valid_scores],
-        }
-        self._last_anonymized_aligned = selected
-        return selected
-
     def _human_facing_candidate(self, aligned_gray):
         """Create the separate visual output without using an expression label.
 
@@ -773,7 +654,7 @@ class ExpressionDeidentifier:
             self.generated_strength = source_generated
 
     def anonymize(self, image, *, expression_label=None, identity_label=None,
-                  aligned=None, selection_reference=None, purpose="display"):
+                  aligned=None, purpose="display"):
         raw_gray = self._image_gray(image)
         is_raw = aligned is False or (aligned is None and self.auto_align and raw_gray.shape not in {(100, 100), (256, 256)})
         matrix = None
@@ -812,27 +693,14 @@ class ExpressionDeidentifier:
         # complete face.  An explicitly supplied GANonymization checkpoint is
         # an offline/high-quality alternative: its generator receives only
         # landmarks and is composited inside the inner face ellipse.
-        if (purpose == "machine" and self.privacy_selection
-                and self.ganonymization_backend is not None and selection_reference is not None):
-            # Offline privacy evaluation may select among landmark-only
-            # candidates using SFace.  No expression label or source pixels
-            # enter the generator, and the selected result is still composited
-            # only inside the face region.
-            output = self.select_anonymized_candidate(
-                aligned256 if is_raw else raw_gray,
-                reference_gray=selection_reference,
-            )
-        elif purpose == "machine" and self.ganonymization_backend is not None:
+        if purpose == "machine" and self.ganonymization_backend is not None:
             output = self._machine_runtime_candidate(aligned256 if is_raw else raw_gray)
         elif purpose == "machine":
             # Realtime fallback: local component edit plus learned residual.
             # It does not copy a donor face or use an expression label.
             output = self._machine_runtime_candidate(aligned256)
         elif self.ganonymization_backend is not None:
-            output = self.select_anonymized_candidate(
-                aligned256 if is_raw else raw_gray,
-                reference_gray=selection_reference,
-            )
+            output = self._generated_component_edit(aligned256 if is_raw else raw_gray)
         else:
             output = self._learned_component_edit(
                 self._component_anonymize(gray, identity_label=identity_label)
@@ -883,19 +751,16 @@ class ExpressionDeidentifier:
         The source frame is converted to grayscale and anonymized first.  The
         expression classifier is called exactly once, on the anonymized face.
         No source-frame expression prediction or expression-conditioned donor
-        selection is performed.  ``diagnostics=False`` keeps identity/SFace and
-        gallery scoring out of realtime video frames; those checks remain
-        available for the image comparison and offline evaluation paths.
+        selection is performed.  ``diagnostics=False`` keeps the optional
+        project identity regression check out of realtime video frames.
         """
         raw_input = self._image_rgb(image)
         was_raw = aligned is False or (aligned is None and self.auto_align and tuple(raw_input.shape[:2]) not in {(100, 100), (256, 256)})
         identity_original = None
-        identity_face = None
         if diagnostics and self.identity_model is not None:
             # Identity evaluation is optional diagnostics only.  It never feeds
             # the expression classifier or the component donor selection.
             original_face = self._prepare_gray(image, aligned=aligned)
-            identity_face = original_face
             identity_original = self.predict_identity(original_face, aligned=True)
 
         # Machine path: local residual/component edit, used by expression and
@@ -903,7 +768,6 @@ class ExpressionDeidentifier:
         machine_anonymized = self.anonymize(
             image,
             aligned=aligned,
-            selection_reference=identity_face,
             purpose="machine",
         )
         expression_input = (
@@ -936,11 +800,8 @@ class ExpressionDeidentifier:
             "component_edit": True,
             "background_preserved": True,
             "anonymized": anonymized,
-            "privacy_selection": dict(self._last_privacy_selection),
             "learned_anonymizer": bool(self.learned_anonymizer_enabled),
             "identity_diagnostics_available": self.identity_model is not None,
-            "sface_diagnostics_available": self.sface_model is not None,
-            "gallery_diagnostics_available": self.identity_gallery is not None,
             "diagnostic_errors": list(self.diagnostic_errors),
         }
         if identity_original is not None:
@@ -948,31 +809,15 @@ class ExpressionDeidentifier:
             identity_display = self.predict_identity(display_aligned, aligned=True)
             a = np.asarray(identity_original["embedding"], dtype=np.float64)
             b = np.asarray(identity_anonymized["embedding"], dtype=np.float64)
-            sface_cosine = self.predict_sface_similarity(
-                original_face,
-                self._last_anonymized_aligned if self._last_anonymized_aligned is not None else anonymized,
-            )
-            display_sface_cosine = self.predict_sface_similarity(original_face, display_aligned)
             result.update({
                 "identity_original": identity_original,
                 "identity_anonymized": identity_anonymized,
                 "identity_cosine": float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b) + 1e-12)),
-                "sface_cosine": sface_cosine,
                 "identity_region": "face_only_ellipse",
                 "identity_prediction_changed": identity_original["label"] != identity_anonymized["label"],
                 "identity_confidence_drop": float(identity_original["confidence"] - identity_anonymized["confidence"]),
                 "identity_display": identity_display,
-                "display_sface_cosine": display_sface_cosine,
             })
-        if diagnostics and self.identity_gallery is not None:
-            if identity_face is None:
-                identity_face = self._prepare_gray(image, aligned=aligned)
-            result.update(self.identity_gallery.compare(
-                identity_face,
-                self._last_anonymized_aligned if self._last_anonymized_aligned is not None else anonymized,
-            ))
-            display_gallery = self.identity_gallery.compare(identity_face, display_aligned)
-            result.update({f"display_{key}": value for key, value in display_gallery.items()})
         return result
 
     def predict_expression(self, image, *, aligned=None):
@@ -1013,21 +858,6 @@ class ExpressionDeidentifier:
             probabilities = self._softmax(logits).detach().cpu().numpy()[0]
         label = int(probabilities.argmax())
         return {"label": label, "confidence": float(probabilities[label]), "embedding": embedding.tolist(), "probabilities": probabilities.tolist()}
-
-    def predict_sface_similarity(self, original, anonymized):
-        """Return a face-recognition cosine for the privacy diagnostic only."""
-        if self.sface_model is None:
-            return None
-        import cv2
-        def aligned_bgr(image):
-            gray = self._face_only_view(image)
-            return cv2.resize(cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR), (112, 112), interpolation=cv2.INTER_LINEAR)
-        try:
-            first = self.sface_model.feature(aligned_bgr(original))
-            second = self.sface_model.feature(aligned_bgr(anonymized))
-            return float(self.sface_model.match(first, second, cv2.FaceRecognizerSF_FR_COSINE))
-        except (cv2.error, ValueError, TypeError):
-            return None
 
     @classmethod
     def _face_only_view(cls, image):

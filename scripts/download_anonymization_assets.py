@@ -1,4 +1,4 @@
-"""Download the optional visual GAN and MediaPipe landmark assets."""
+"""Download the official GANonymization and MediaPipe assets, with a ledger."""
 import hashlib
 import json
 import time

@@ -8,7 +8,8 @@
 git lfs pull
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
+python -m pip install -r requirements-train.txt
+python -m pip install -r requirements-anonymization.txt
 python -m pip install -r requirements-ui.txt
 python -m expression_deid.desktop_ui --device cuda
 ```

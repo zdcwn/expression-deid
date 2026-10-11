@@ -9,7 +9,11 @@ GANonymization checkpoint is supplied, the generator receives only a rendered
 from __future__ import annotations
 
 import ast
+import ctypes
+import hashlib
+import os
 from pathlib import Path
+import shutil
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageOps
@@ -20,6 +24,22 @@ class FaceLandmarksUnavailable(RuntimeError):
 
 
 class GANonymizationBackend:
+    @staticmethod
+    def _mediapipe_asset_path(path: Path) -> tuple[Path, Path | None]:
+        """Return a MediaPipe-readable path on Windows profiles with Unicode names."""
+        if os.name != "nt" or str(path).isascii():
+            return path, None
+        buffer = ctypes.create_unicode_buffer(32768)
+        length = ctypes.windll.kernel32.GetShortPathNameW(str(path), buffer, len(buffer))
+        if length and str(buffer.value).isascii():
+            return Path(buffer.value), None
+        cache_root = Path("C:/Temp/expression-deid-assets")
+        cache_root.mkdir(parents=True, exist_ok=True)
+        cached = cache_root / (hashlib.sha256(str(path).encode("utf-8")).hexdigest()[:16] + path.suffix)
+        if not cached.is_file() or cached.stat().st_size != path.stat().st_size:
+            shutil.copyfile(path, cached)
+        return cached, cached
+
     def __init__(self, checkpoint: str | Path, *, device: str = "cuda", repo_root: str | Path | None = None, image_size: int = 512, landmark_model: str | Path | None = None, geometry_strength: float = 0.0, geometry_profile: int = 0):
         try:
             import torch
@@ -67,9 +87,10 @@ class GANonymizationBackend:
         model_path = Path(landmark_model) if landmark_model else root.parent / "models/face_landmarker.task"
         if not model_path.is_file():
             raise FileNotFoundError(f"Missing landmark asset: {model_path}; run scripts/download_anonymization_assets.py")
+        mediapipe_model_path, self._cached_landmark_model = self._mediapipe_asset_path(model_path)
         self.face_mesh = mp.tasks.vision.FaceLandmarker.create_from_options(
             mp.tasks.vision.FaceLandmarkerOptions(
-                base_options=mp.tasks.BaseOptions(model_asset_path=str(model_path)),
+                base_options=mp.tasks.BaseOptions(model_asset_path=str(mediapipe_model_path)),
                 running_mode=mp.tasks.vision.RunningMode.IMAGE,
                 num_faces=1,
                 output_face_blendshapes=False,
@@ -147,3 +168,8 @@ class GANonymizationBackend:
 
     def close(self):
         self.face_mesh.close()
+        if self._cached_landmark_model is not None:
+            try:
+                self._cached_landmark_model.unlink()
+            except OSError:
+                pass
