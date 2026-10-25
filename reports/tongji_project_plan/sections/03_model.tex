@@ -1,13 +1,15 @@
 \section{系统设计与技术路线}
 \label{sec:model}
 \subsection{总体流程}
-输入拟先灰度化，经检测对齐后进行局部匿名化，匿名灰度脸作为表情模型的唯一输入。工程拟按图\ref{fig:structure}归类，分别管理源码、运行权重、训练候选与输出结果。
+系统拟划分为采集与预处理、统一人脸匿名化、表情识别和展示评价四部分，处理顺序见图\ref{fig:pipeline}。图片与视频帧先灰度化，再进行人脸检测与对齐；匿名化模块修改面部内部，表情模型只接收匿名处理后的灰度脸。
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=\linewidth]{project_structure.pdf}
-\caption{拟采用的项目目录结构与职责}
-\label{fig:structure}
+\includegraphics[width=\linewidth]{pipeline_diagram.png}
+\caption{拟采用的系统处理流程}
+\label{fig:pipeline}
 \end{figure}
+
+各模块拟通过统一输入输出接口衔接，分别检查预处理、面部编辑和分类结果后再开展联合实验。展示端负责画面对照与结果呈现，训练和评价独立组织，便于比较备选方案并逐步接入应用。
 
 \subsection{匿名化模块}
 拟使用五点对齐确定面部坐标，在眼眉、鼻部、嘴部及局部纹理区域编辑。软掩膜控制作用范围并合成回灰度画面，面部外区域保留原像素。训练目标兼顾像素变化范围、表情保持、身份抑制与局部平滑，通过项目内身份对照和表情标签共同选择候选。
