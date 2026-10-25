@@ -1,0 +1,55 @@
+
+% Shared body settings for the two course reports.
+\geometry{a4paper,left=25mm,right=25mm,top=27mm,bottom=25mm,headheight=30pt,headsep=12pt}
+\ctexset{
+  section={format={\raggedright\heiti\bfseries\fontsize{16bp}{23bp}\selectfont},
+    name={},number=\arabic{section},aftername={.\quad},
+    beforeskip=22pt,afterskip=12pt,indent=0pt},
+  subsection={format={\raggedright\heiti\bfseries\fontsize{13bp}{21bp}\selectfont},
+    aftername={\quad},beforeskip=14pt,afterskip=7pt,indent=0pt},
+  subsubsection={format={\raggedright\heiti\bfseries\fontsize{12bp}{20bp}\selectfont},
+    aftername={\quad},beforeskip=10pt,afterskip=5pt,indent=0pt}
+}
+\setcounter{secnumdepth}{2}
+\setcounter{tocdepth}{2}
+\renewcommand{\cftsecfont}{\heiti\bfseries\fontsize{10.5bp}{15bp}\selectfont}
+\renewcommand{\cftsubsecfont}{\songti\fontsize{10.5bp}{15bp}\selectfont}
+\renewcommand{\cftsecpagefont}{\fontsize{10.5bp}{15bp}\selectfont}
+\renewcommand{\cftsubsecpagefont}{\fontsize{10.5bp}{15bp}\selectfont}
+\setlength{\cftbeforesecskip}{3.0pt}
+\setlength{\cftbeforesubsecskip}{0pt}
+\setlength{\cftsubsecindent}{1.5em}
+\renewcommand{\contentsname}{\heiti\bfseries\fontsize{16bp}{24bp}\selectfont 目\quad 录}
+\newcommand{\ReportBody}{%
+  \setstretch{1}\songti\fontsize{12bp}{23.4bp}\selectfont
+  \setlength{\parindent}{2em}\setlength{\parskip}{3pt plus 1pt minus .5pt}
+}
+\newcommand{\ReportTable}{\songti\fontsize{10.5bp}{15.5bp}\selectfont}
+\AtBeginEnvironment{tabular}{\ReportTable}
+\AtBeginEnvironment{tabularx}{\ReportTable}
+\AtBeginEnvironment{longtable}{\ReportTable}
+\renewcommand{\arraystretch}{1.18}
+\setlength{\tabcolsep}{5pt}
+\setlength{\textfloatsep}{15pt plus 3pt minus 2pt}
+\setlength{\floatsep}{12pt plus 2pt minus 2pt}
+\setlength{\intextsep}{14pt plus 2pt minus 2pt}
+\captionsetup{font={small},labelfont=bf,skip=6pt}
+\setlist{itemsep=3pt,topsep=6pt,parsep=0pt}
+\raggedbottom
+\emergencystretch=2em
+\fancypagestyle{firststyle}{%
+  \fancyhf{}
+  \fancyhead[L]{\includegraphics[height=.85cm]{\tongjilogopath}}
+  \fancyhead[R]{\tongjiheadmark}
+  \fancyfoot[C]{\zihao{5}\thepage}
+  \renewcommand{\headrule}{\tongjiheadrule}
+  \renewcommand{\footrule}{}
+}
+\fancypagestyle{mainstyle}{%
+  \fancyhf{}
+  \fancyhead[L]{\includegraphics[height=.85cm]{\tongjilogopath}}
+  \fancyhead[R]{\tongjiheadmark}
+  \fancyfoot[C]{\zihao{5}第\,\thepage\,页\quad 共\,\pageref{LastPage}\,页}
+  \renewcommand{\headrule}{\tongjiheadrule}
+  \renewcommand{\footrule}{}
+}

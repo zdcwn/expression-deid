@@ -1,0 +1,25 @@
+**/*.aux
+**/*.bbl
+**/*.bcf
+**/*.blg
+**/*.fls
+**/*.fdb_latexmk
+**/*.log
+**/*.out
+**/*.toc
+**/*.lof
+**/*.lot
+**/*.run.xml
+**/*-blx.bib
+**/*.xdv
+**/*.synctex.gz
+
+# Local revision files and unpacked template copies.
+/_agent_dump/
+/template-unpack/
+/tongji-template/
+/_*
+**/_*.py
+**/compile-*.err
+**/full.txt
+**/toc_extract.txt

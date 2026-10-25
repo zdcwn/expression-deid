@@ -1,0 +1,21 @@
+\appendix
+\section{附录}
+\label{sec:appendix}
+\subsection{计划采用的运行入口}
+项目拟统一使用 Python 桌面入口，并将依赖按训练、匿名化和界面分别整理。预期启动和检查命令如下，具体资源配置在实施阶段补齐。
+\begin{lstlisting}[language={},basicstyle=\ttfamily\small,breaklines=true,frame=none]
+python -m pip install -r requirements-train.txt
+python -m pip install -r requirements-anonymization.txt
+python -m pip install -r requirements-ui.txt
+python -m expression_deid.desktop_ui --device cuda
+\end{lstlisting}
+
+\subsection{工程检查安排}
+拟依次检查输入格式、灰度化、检测对齐、匿名合成与分类调用。正常输入确认结果正确关联，异常输入确认状态撤销和资源释放。桌面检查覆盖图片切换、视频停止、摄像头打开及窗口退出，避免只检查模型前向而忽略完整使用流程。
+
+训练和应用均检查匿名输入来源。每次替换模型，先核对数据与权重配置，再运行同一组图片和视频，保存分域评价记录，最后更新报告图表与运行说明。
+
+\subsection{第三方资源安排}
+拟使用 YuNet 进行人脸检测、MediaPipe 进行关键点提取、GANonymization 组件实现条件生成，表情质量配置参考 EmotiEffLib 的公开表征。数据集分别记录来源、标签和使用要求，使用的开源组件保留许可证；报告沿用同济课程报告 LaTeX 模板。
+
+人员安排见表\ref{tab:division}，阶段任务见表\ref{tab:schedule}。高霁负责各部分接口与最终整合，其余成员分别围绕数据、表情训练、匿名化调研、视频联调和实验材料推进，并在阶段结束时共同核对输入、输出和交付资料。
