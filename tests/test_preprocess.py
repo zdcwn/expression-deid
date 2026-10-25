@@ -2,10 +2,10 @@ import unittest
 
 import numpy as np
 
-from expression_deid.align import landmarks_ok, select_face, similarity_matrix, warp_gray
+from expression_deid.preprocessing.align import landmarks_ok, select_face, similarity_matrix, warp_gray
 from expression_deid.labels import parse_kmu_stem
-from expression_deid.normalize import NormStats, expression_input, normalize
-from expression_deid.prepare import _mark_jitter
+from expression_deid.preprocessing.normalize import NormStats, expression_input, normalize
+from expression_deid.preprocessing.prepare import _mark_jitter
 
 
 def _record(person, expression, frame, eye_x):
@@ -62,7 +62,7 @@ class PreprocessTest(unittest.TestCase):
         self.assertLess(np.abs(predicted - dst).max(), 1e-8)
 
     def test_warp_puts_dot_on_template(self):
-        from expression_deid.align import template_for
+        from expression_deid.preprocessing.align import template_for
 
         template = template_for(256)
         gray = np.zeros((400, 400), np.uint8)

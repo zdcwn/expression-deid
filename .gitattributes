@@ -1,1 +1,1 @@
-models/ganonymization_50.ckpt filter=lfs diff=lfs merge=lfs -text
+models/anonymization/ganonymization_50.ckpt filter=lfs diff=lfs merge=lfs -text

@@ -5,10 +5,10 @@ from pathlib import Path
 
 import numpy as np
 
-from expression_deid.data import split_indices, split_ppb_people
-from expression_deid.evaluate import summarize
-from expression_deid.inference import ExpressionDeidentifier
-from expression_deid.train import _expression_preservation_losses
+from expression_deid.training.data import split_indices, split_ppb_people
+from expression_deid.training.evaluate import summarize
+from expression_deid.runtime.pipeline import ExpressionDeidentifier
+from expression_deid.training.train import _expression_preservation_losses
 try:
     from expression_deid.models import AnonymizerUNet, ExpressionNet, IdentityNet, load_checkpoint, save_checkpoint
 except RuntimeError as exc:  # PyTorch is optional for preprocessing users.
@@ -114,7 +114,7 @@ class ModelTest(unittest.TestCase):
         self.assertNotIn("expression_consistency", result)
 
     def test_python_video_runner_classifies_edited_face_only(self):
-        from expression_deid.video_demo import FastVideoRunner
+        from expression_deid.runtime.video import FastVideoRunner
 
         source = inspect.getsource(FastVideoRunner.process_frame)
         self.assertIn("predict_expression(edited100", source)

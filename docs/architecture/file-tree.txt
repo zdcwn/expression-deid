@@ -1,0 +1,207 @@
+expression-deid/
+├─ datasets/
+│  ├─ kmu-fed/
+│  │  └─ [source images, aligned images and manifests]
+│  ├─ kmu-fed-aligned/
+│  │  └─ [source images, aligned images and manifests]
+│  ├─ raf-db/
+│  │  └─ [source images, aligned images and manifests]
+│  └─ README.md
+├─ docs/
+│  ├─ architecture/
+│  │  ├─ file-tree.txt
+│  │  ├─ models.md
+│  │  └─ project-layout.md
+│  ├─ design/
+│  │  └─ desktop.md
+│  ├─ handoff.md
+│  └─ model-metrics.json
+├─ examples/
+│  ├─ videos/
+│  │  ├─ example_anger.mp4
+│  │  ├─ example_kmu_expressions.mp4
+│  │  ├─ example_mixed.mp4
+│  │  └─ example_surprise.mp4
+│  └─ README.md
+├─ expression_deid/
+│  ├─ preprocessing/
+│  │  ├─ __init__.py
+│  │  ├─ align.py
+│  │  ├─ detect.py
+│  │  ├─ feature_geometry.py
+│  │  ├─ norm_stats.json
+│  │  ├─ normalize.py
+│  │  ├─ prepare.py
+│  │  └─ prepare_ppb.py
+│  ├─ runtime/
+│  │  ├─ __init__.py
+│  │  ├─ anonymization.py
+│  │  ├─ expression.py
+│  │  ├─ pipeline.py
+│  │  ├─ temporal.py
+│  │  └─ video.py
+│  ├─ training/
+│  │  ├─ __init__.py
+│  │  ├─ data.py
+│  │  ├─ evaluate.py
+│  │  └─ train.py
+│  ├─ ui/
+│  │  ├─ __init__.py
+│  │  ├─ desktop.py
+│  │  ├─ opencv_demo.py
+│  │  └─ widgets.py
+│  ├─ __init__.py
+│  ├─ __main__.py
+│  ├─ cli.py
+│  ├─ config.py
+│  ├─ desktop_ui.py
+│  ├─ labels.py
+│  └─ models.py
+├─ models/
+│  ├─ anonymization/
+│  │  ├─ anonymizer_adversarial_v1.pt
+│  │  └─ ganonymization_50.ckpt
+│  ├─ detection/
+│  │  ├─ face_detection_yunet_2023mar.onnx
+│  │  └─ face_landmarker.task
+│  ├─ expression/
+│  │  ├─ expression_machine_selector_texture.pt
+│  │  ├─ expression_realtime_stable.pt
+│  │  ├─ expression_video_quality.json
+│  │  └─ expression_video_quality.ts.pt
+│  ├─ training/
+│  │  └─ README.md
+│  └─ README.md
+├─ outputs/
+│  └─ README.md
+├─ reports/
+│  ├─ archive/
+│  │  ├─ README.md
+│  │  ├─ teacher_project_report.docx
+│  │  └─ teacher_project_report.md
+│  ├─ template-license/
+│  │  ├─ LICENSE
+│  │  ├─ README.md
+│  │  └─ UPSTREAM-NOTICE.md
+│  ├─ tongji_final_report/
+│  │  ├─ bib/
+│  │  │  └─ note.bib
+│  │  ├─ figures/
+│  │  │  ├─ anonymization_best_sheet.png
+│  │  │  ├─ expression_metrics.png
+│  │  │  ├─ pipeline_diagram.png
+│  │  │  ├─ project_structure.pdf
+│  │  │  ├─ tongji.pdf
+│  │  │  ├─ ui_desktop_pages.png
+│  │  │  ├─ ui_image_detail.png
+│  │  │  ├─ ui_performance_detail.png
+│  │  │  └─ ui_video_detail.png
+│  │  ├─ sections/
+│  │  │  ├─ 01_intro.tex
+│  │  │  ├─ 02_related.tex
+│  │  │  ├─ 03_model.tex
+│  │  │  ├─ 04_experiment.tex
+│  │  │  ├─ 05_results.tex
+│  │  │  ├─ 06_discussion.tex
+│  │  │  ├─ 07_conclusion.tex
+│  │  │  ├─ appendix.tex
+│  │  │  └─ frontcover.tex
+│  │  ├─ style/
+│  │  │  ├─ report-layout.tex
+│  │  │  ├─ tongjithesis.cfg
+│  │  │  └─ tongjithesis.cls
+│  │  ├─ .latexmkrc
+│  │  ├─ Makefile
+│  │  ├─ README.md
+│  │  ├─ main.pdf
+│  │  ├─ main.tex
+│  │  ├─ make.bat
+│  │  ├─ package.json
+│  │  ├─ tongjithesis.cfg
+│  │  └─ tongjithesis.cls
+│  ├─ tongji_project_plan/
+│  │  ├─ bib/
+│  │  │  └─ note.bib
+│  │  ├─ figures/
+│  │  │  ├─ pipeline_diagram.png
+│  │  │  ├─ project_structure.pdf
+│  │  │  └─ tongji.pdf
+│  │  ├─ sections/
+│  │  │  ├─ 01_intro.tex
+│  │  │  ├─ 02_related.tex
+│  │  │  ├─ 03_model.tex
+│  │  │  ├─ 04_experiment.tex
+│  │  │  ├─ 05_results.tex
+│  │  │  ├─ 06_discussion.tex
+│  │  │  ├─ 07_conclusion.tex
+│  │  │  ├─ appendix.tex
+│  │  │  └─ frontcover.tex
+│  │  ├─ style/
+│  │  │  ├─ report-layout.tex
+│  │  │  ├─ tongjithesis.cfg
+│  │  │  └─ tongjithesis.cls
+│  │  ├─ .latexmkrc
+│  │  ├─ Makefile
+│  │  ├─ README.md
+│  │  ├─ main.pdf
+│  │  ├─ main.tex
+│  │  ├─ make.bat
+│  │  ├─ package.json
+│  │  ├─ tongjithesis.cfg
+│  │  └─ tongjithesis.cls
+│  ├─ .gitignore
+│  ├─ README.md
+│  ├─ build_reports.ps1
+│  └─ 交付检查.md
+├─ requirements/
+│  ├─ README.md
+│  ├─ anonymization.txt
+│  ├─ base.txt
+│  ├─ quality-training.txt
+│  ├─ training.txt
+│  └─ ui.txt
+├─ scripts/
+│  ├─ assets/
+│  │  ├─ __init__.py
+│  │  └─ download_anonymization_assets.py
+│  ├─ checks/
+│  │  ├─ __init__.py
+│  │  ├─ check_anonymous_cache.py
+│  │  ├─ check_desktop_presentation.py
+│  │  ├─ check_desktop_runtime.py
+│  │  ├─ check_detector_reference.py
+│  │  ├─ check_training_paths.py
+│  │  ├─ check_video_quality.py
+│  │  └─ check_video_stability.py
+│  ├─ data/
+│  │  ├─ __init__.py
+│  │  └─ prepare_gan_expression.py
+│  ├─ export/
+│  │  ├─ __init__.py
+│  │  └─ export_video_quality.py
+│  ├─ training/
+│  │  ├─ __init__.py
+│  │  ├─ train_realtime_expression.py
+│  │  └─ train_video_quality.py
+│  ├─ README.md
+│  └─ __init__.py
+├─ tests/
+│  ├─ test_audit_regressions.py
+│  ├─ test_expression_quality.py
+│  ├─ test_models.py
+│  ├─ test_preprocess.py
+│  ├─ test_project_layout.py
+│  └─ test_temporal.py
+├─ third_party/
+│  ├─ ganonymization/
+│  │  ├─ lib/
+│  │  │  └─ models/
+│  │  │     └─ pix2pix.py
+│  │  └─ LICENSE
+│  ├─ licenses/
+│  │  ├─ EmotiEffLib-Apache-2.0.txt
+│  │  └─ expression-quality-NOTICE.md
+│  └─ README.md
+├─ .gitattributes
+├─ .gitignore
+└─ README.md

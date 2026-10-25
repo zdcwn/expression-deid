@@ -3,6 +3,7 @@
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+EXAMPLE_VIDEO_DIR = ROOT / "examples" / "videos"
 DATA_DIR = ROOT / "datasets"
 RAF_DIR = DATA_DIR / "raf-db"
 KMU_DIR = DATA_DIR / "kmu-fed"
@@ -11,12 +12,12 @@ FERPLUS_DIR = DATA_DIR / "fer2013-hf"
 PPB_DIR = DATA_DIR / "ppb-emo"
 PPB_ALIGNED_DIR = PPB_DIR / "neutral-aligned"
 
-MODEL_PATH = ROOT / "models" / "face_detection_yunet_2023mar.onnx"
+MODEL_PATH = ROOT / "models" / "detection" / "face_detection_yunet_2023mar.onnx"
 MODEL_URL = (
     "https://github.com/opencv/opencv_zoo/raw/main/"
     "models/face_detection_yunet/face_detection_yunet_2023mar.onnx"
 )
-STATS_PATH = Path(__file__).resolve().parent / "norm_stats.json"
+STATS_PATH = Path(__file__).resolve().parent / "preprocessing" / "norm_stats.json"
 
 # KMU 对齐后的边长。表情模型读的时候再缩到 RAF 的 100。
 ALIGN_SIZE = 256

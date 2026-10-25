@@ -12,26 +12,17 @@
 
 图\ref{fig:pipeline}中，原始画面只在采集、定位、匿名处理及对照显示中使用。表情调用位于匿名化之后；身份模型作为离线评价工具，用于比较同一输入在处理前后的身份预测变化，不参与视频中的表情判断。
 
-\subsection{模块输入与输出}
-检测模块使用 YuNet 定位人脸，并输出双眼、鼻尖和嘴角五点。对齐模块根据五点求取相似变换，减小尺度、平移和面内旋转的影响。统一坐标后，局部掩膜能够稳定覆盖面部，匿名结果也能合成回原画面的相应位置。
+\subsection{工程目录与模块接口}
+源码按职责划分为四个子包：\path{preprocessing/} 负责灰度、检测与对齐，\path{training/} 负责数据加载、训练和离线评价，\path{runtime/} 负责匿名化、表情及视频推理，\path{ui/} 负责 Python 桌面窗口和工作线程。公共网络定义保存在 \path{expression_deid/models.py}，权重文件则按检测、匿名化和表情存入 \path{models/} 的对应子目录，目录关系见图\ref{fig:structure}。
 
-\begin{table}[htbp]
+\begin{figure}[htbp]
 \centering
-\caption{系统模块及其输入输出}
-\label{tab:io}
-\begin{tabularx}{\linewidth}{@{}lXX@{}}
-\toprule
-模块 & 输入 & 输出\\
-\midrule
-采集与灰度化 & 图片或视频帧 & 单通道灰度画面\\
-人脸检测与对齐 & 灰度画面 & 人脸框、五点与对齐脸\\
-统一匿名化 & 对齐人脸、区域约束 & 匿名画面与匿名灰度脸\\
-表情识别 & 匿名灰度脸 & 七类概率与当前类别\\
-时序决策 & 当前及历史匿名帧概率 & 稳定类别、置信度与状态\\
-桌面展示 & 图像、分析结果与计时信息 & 对照画面与结果面板\\
-\bottomrule
-\end{tabularx}
-\end{table}
+\includegraphics[width=\linewidth]{project_structure.pdf}
+\caption{项目实际目录与文件职责分组}
+\label{fig:structure}
+\end{figure}
+
+训练候选写入 \path{models/training/}，运行权重从明确的功能目录加载；示例输入放在 \path{examples/videos/}，缓存、预测与评价结果写入 \path{outputs/}。桌面端调用运行模块，运行模块复用检测对齐和网络定义，页面只接收计算结果。训练、导出、检查脚本在 \path{scripts/} 下分别归组，使训练产物、应用输入和运行输出保持清楚的对应关系。
 
 \subsection{匿名化输入边界}
 系统将分类输入定义为从实际匿名结果重新对齐得到的 $100\times100$ 灰度人脸。处理顺序为

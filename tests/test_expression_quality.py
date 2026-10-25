@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import numpy as np
 import torch
-from expression_deid.expression_quality import anonymous_tensor, QualityExpressionPredictor
+from expression_deid.runtime.expression import anonymous_tensor, QualityExpressionPredictor
 from expression_deid.labels import EXPRESSION_NAMES
 
 
@@ -64,7 +64,7 @@ class QualityExpressionTests(unittest.TestCase):
 
     def test_source_pixels_are_rejected_and_probabilities_are_real(self):
         with tempfile.TemporaryDirectory() as folder:
-            with patch('torch.jit.load',return_value=FixedLogits([0,0,0,0,0,0,2])), patch('expression_deid.expression_quality.load_checkpoint',return_value=(FixedLogits([0,0,0,0,0,0,2]),{})):
+            with patch('torch.jit.load',return_value=FixedLogits([0,0,0,0,0,0,2])), patch('expression_deid.runtime.expression.load_checkpoint',return_value=(FixedLogits([0,0,0,0,0,0,2]),{})):
                 model=QualityExpressionPredictor(manifest=self.manifest(folder))
             image=np.full((100,100),100,np.uint8)
             with self.assertRaisesRegex(ValueError,'原始图像'): model.predict_anonymous(image,input_source='original')
@@ -85,14 +85,14 @@ class QualityExpressionTests(unittest.TestCase):
 
     def test_nonfinite_model_output_stops_prediction(self):
         with tempfile.TemporaryDirectory() as folder:
-            with patch('torch.jit.load',return_value=FixedLogits([float('nan')]*7)), patch('expression_deid.expression_quality.load_checkpoint',return_value=(FixedLogits([0]*7),{})):
+            with patch('torch.jit.load',return_value=FixedLogits([float('nan')]*7)), patch('expression_deid.runtime.expression.load_checkpoint',return_value=(FixedLogits([0]*7),{})):
                 model=QualityExpressionPredictor(manifest=self.manifest(folder))
             with self.assertRaisesRegex(RuntimeError,'输出无效'):
                 model.predict_anonymous(np.zeros((100,100),np.uint8),input_source='anonymized_only')
 
     def test_batch_pairs_each_face_with_its_mirror(self):
         with tempfile.TemporaryDirectory() as folder:
-            with patch('torch.jit.load',return_value=FixedLogits([0]*7)), patch('expression_deid.expression_quality.load_checkpoint',return_value=(FixedLogits([0]*7),{})):
+            with patch('torch.jit.load',return_value=FixedLogits([0]*7)), patch('expression_deid.runtime.expression.load_checkpoint',return_value=(FixedLogits([0]*7),{})):
                 model=QualityExpressionPredictor(manifest=self.manifest(folder))
             quality_rows=np.array([[3,0,0,0,0,0,0],[0,0,3,0,0,0,0],[0,0,0,0,0,3,0],[0,0,0,0,0,0,3]],dtype=np.float32)
             compact_rows=np.array([[0,3,0,0,0,0,0],[0,0,0,3,0,0,0],[0,0,0,0,3,0,0],[0,0,0,0,0,0,3]],dtype=np.float32)
@@ -110,7 +110,7 @@ class QualityExpressionTests(unittest.TestCase):
     def test_training_rejects_raw_cache_and_partition_leakage(self):
         import importlib.util
         from expression_deid.config import ROOT
-        spec=importlib.util.spec_from_file_location('quality_training_checks',ROOT/'scripts/train_video_quality.py')
+        spec=importlib.util.spec_from_file_location('quality_training_checks',ROOT/'scripts/training/train_video_quality.py')
         training=importlib.util.module_from_spec(spec);spec.loader.exec_module(training)
         fixture=dict(images=np.zeros((6,100,100),np.uint8), labels=np.array([0,0,6,0,0,6]),
                      domains=np.array(['raf','kmu','ppb']*2), splits=np.array(['train']*3+['valid']*3),

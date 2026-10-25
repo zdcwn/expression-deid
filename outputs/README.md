@@ -1,10 +1,13 @@
-# 示例输出
+# 本地生成结果
 
-Git 只保留桌面实时页需要的四个示例视频：
+`outputs/` 只放运行过程中产生的文件，除本说明外默认不提交。
 
-- `example_kmu_expressions.mp4`：六类表情，15 秒；
-- `example_mixed.mp4`：混合场景，12 秒；
-- `example_anger.mp4`：愤怒，3 秒；
-- `example_surprise.mp4`：惊讶，3 秒。
+| 内容 | 常见位置 |
+|---|---|
+| 单图匿名结果和预测 JSON | 命令行 `infer --output` 指定的目录 |
+| 处理后的视频与逐帧记录 | `video --output`、`--telemetry` 指定的路径 |
+| 匿名训练缓存 | `realtime_training/anonymous_cache.npz` |
+| 离线评价 | `evaluation/` 或评价命令指定的目录 |
+| 桌面和视频检查 | 检查脚本的 `--output` 目录 |
 
-它们均为 24 FPS、256×256。模型评估 JSON、逐帧图片、训练缓存、日志和用户测试结果不提交到 Git；临时结果请放在本地未跟踪目录。
+随项目提供的视频在 `examples/videos/`。训练权重在 `models/training/`，发布权重在 `models/` 的相应功能目录，三者分别管理。

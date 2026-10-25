@@ -8,13 +8,13 @@ from pathlib import Path
 
 from PIL import Image
 
-from expression_deid import prepare
-from expression_deid import prepare_ppb
+from expression_deid.preprocessing import prepare
+from expression_deid.preprocessing import prepare_ppb
 from expression_deid.config import ROOT
-from expression_deid.evaluate import build_parser as build_evaluate_parser
-from expression_deid.inference import ExpressionDeidentifier
-from expression_deid.train import build_parser as build_train_parser
-from expression_deid.video_demo import run_camera, run_video
+from expression_deid.training.evaluate import build_parser as build_evaluate_parser
+from expression_deid.runtime.pipeline import ExpressionDeidentifier
+from expression_deid.training.train import build_parser as build_train_parser
+from expression_deid.runtime.video import run_camera, run_video
 
 
 def _run_prepare(args):
@@ -99,7 +99,7 @@ def build_parser():
     p = subparsers.add_parser("infer", help="对单张图或目录做匿名化和表情识别")
     p.add_argument("--anonymizer-checkpoint", required=True); p.add_argument("--expression-checkpoint", required=True); p.add_argument("--identity-checkpoint"); p.add_argument("--ganonymization-checkpoint", help="可选：GANonymization 的 landmark-only 生成器检查点"); p.add_argument("--ganonymization-repo", help="GANonymization 源码目录"); p.add_argument("--input", required=True); p.add_argument("--output", default="outputs/inference"); p.add_argument("--pattern", default="*.jpg"); p.add_argument("--device", default="cpu"); p.add_argument('--expression-ensemble',action='store_true',help='显式加入旧 RAF/joint 辅助模型；默认只使用指定检查点'); p.set_defaults(func=_run_infer)
     p = subparsers.add_parser("video", help="Python 视频匿名化与匿名图表情演示")
-    p.add_argument("--input", required=True); p.add_argument("--output", default="outputs/video_demo.mp4"); p.add_argument("--telemetry"); p.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto"); p.add_argument("--detect-interval", type=int, default=5); p.add_argument("--limit", type=int, default=0); p.add_argument("--ganonymization-checkpoint", help="可选；模型文件存在时默认使用 models/ganonymization_50.ckpt"); p.add_argument("--ganonymization-repo", help="可选；默认使用项目内 external_ganonymization"); p.add_argument("--expression-checkpoint", default=None); p.set_defaults(func=_run_video)
+    p.add_argument("--input", required=True); p.add_argument("--output", default="outputs/video_demo.mp4"); p.add_argument("--telemetry"); p.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto"); p.add_argument("--detect-interval", type=int, default=5); p.add_argument("--limit", type=int, default=0); p.add_argument("--ganonymization-checkpoint", help="可选；模型文件存在时默认使用 models/anonymization/ganonymization_50.ckpt"); p.add_argument("--ganonymization-repo", help="可选；默认使用项目内 third_party/ganonymization"); p.add_argument("--expression-checkpoint", default=None); p.set_defaults(func=_run_video)
     p = subparsers.add_parser("camera", help="Python 本地摄像头实时匿名化与表情演示")
     p.add_argument("--index", type=int, default=0, help="摄像头索引，默认 0")
     p.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")

@@ -2,16 +2,16 @@
 \section{附录}
 \label{sec:appendix}
 \subsection{主要运行命令}
-在项目根目录安装运行依赖，将模型资产放入 \texttt{models/}，再启动桌面端。GPU 环境使用 CUDA 参数，CPU 可用于图片和小样本检查。
+在项目根目录安装运行依赖，按功能目录放置模型资产，再启动桌面端。GPU 环境使用 CUDA 参数，CPU 可用于图片和小样本检查。
 \begin{lstlisting}[language={},basicstyle=\ttfamily\small,breaklines=true,frame=none]
-python -m pip install -r requirements-train.txt
-python -m pip install -r requirements-anonymization.txt
-python -m pip install -r requirements-ui.txt
+python -m pip install -r requirements/training.txt
+python -m pip install -r requirements/anonymization.txt
+python -m pip install -r requirements/ui.txt
 python -m expression_deid.desktop_ui --device cuda
 \end{lstlisting}
 
 \subsection{模型与工程检查}
-运行资源按功能组织，模型清单见表\ref{tab:models}。质量表情权重同时配有 JSON 契约，记录输入预处理、类别顺序、校准参数和校验值。更换权重时应同步核对该文件。
+运行资源分别放入 \path{models/detection/}、\path{models/anonymization/} 和 \path{models/expression/}，模型清单见表\ref{tab:models}。质量表情权重同时配有 JSON 契约，记录输入预处理、类别顺序、校准参数和校验值。更换权重时应同步核对该文件。
 \begin{table}[htbp]
 \centering
 \caption{桌面运行资源}
@@ -31,16 +31,16 @@ python -m expression_deid.desktop_ui --device cuda
 \end{tabularx}
 \end{table}
 
-工程检查包括语法与导入检查、匿名输入边界、图像尺寸、页面切换、视频停止、资源释放和异常输入。分类器输入应来自匿名结果，无脸或匿名处理失败时不以源脸补齐。下列入口用于日常检查，具体模型效果按数据集评价。
+工程检查包括语法与导入检查、匿名输入边界、图像尺寸、页面切换、视频停止、资源释放和异常输入。分类器输入应来自匿名结果，无脸或匿名处理失败时不以源脸补齐。下列入口用于日常检查，逐文件职责与训练产物位置记录于 \path{docs/architecture/project-layout.md}；具体模型效果按数据集评价。
 \begin{lstlisting}[language={},basicstyle=\ttfamily\small,breaklines=true,frame=none]
 python -m compileall -q expression_deid scripts tests
 python -m unittest discover -s tests -p "test_*.py" -q
-python scripts/check_desktop_presentation.py --device cuda
+python scripts/checks/check_desktop_presentation.py --device cuda
 \end{lstlisting}
 
 \clearpage
 \subsection{第三方资源}
-人脸检测使用 YuNet，关键点提取使用 MediaPipe Face Landmarker，条件生成使用 GANonymization 的公开组件。表情质量配置使用 EmotiEffLib 的固定版本表征，其来源和许可记录于 \path{licenses/expression-quality-NOTICE.md}。训练数据分别遵守 RAF-DB、KMU-FED、PPB-Emo 和 FER+ 的使用要求；工程中保留相应来源，数据与模型按各自许可共享。
+人脸检测使用 YuNet，关键点提取使用 MediaPipe Face Landmarker，条件生成使用 GANonymization 的公开组件。表情质量配置使用 EmotiEffLib 的固定版本表征，其来源和许可记录于 \path{third_party/licenses/expression-quality-NOTICE.md}。训练数据分别遵守 RAF-DB、KMU-FED、PPB-Emo 和 FER+ 的使用要求；工程中保留相应来源，数据与模型按各自许可共享。
 
 报告排版采用 LostSirius 的同济课程报告 LaTeX 模板，运行与界面依赖 PyTorch、OpenCV、PyAV、PySide6。第三方网络和公开权重用于其实际承担的组件，项目工作包括输入链路设计、匿名域适配、局部合成、时序处理、桌面集成与实验分析。
 

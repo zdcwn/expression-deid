@@ -1,10 +1,10 @@
 {
   "schema": 1,
   "date": "2026-10-09",
-  "model": "models/expression_video_quality.ts.pt",
+  "model": "models/expression/expression_video_quality.ts.pt",
   "expression_comparison": [
     {
-      "checkpoint": "models/expression_realtime_stable.pt",
+      "checkpoint": "models/expression/expression_realtime_stable.pt",
       "domains": {
         "valid_raf": {
           "samples": 3068,
@@ -366,7 +366,7 @@
       "scope": "历史快速模型，仅用于桌面页对照"
     },
     {
-      "checkpoint": "models/expression_video_quality.ts.pt",
+      "checkpoint": "models/expression/expression_video_quality.ts.pt",
       "domains": {
         "valid_raf": {
           "samples": 3068,

@@ -20,7 +20,7 @@ def require_torch():
         import torch.nn.functional as F  # type: ignore
     except (ImportError, OSError) as exc:  # pragma: no cover - depends on environment
         raise RuntimeError(
-            "模型训练需要 PyTorch，请先安装 requirements-train.txt 中的依赖。"
+            "模型训练需要 PyTorch，请先安装 requirements/training.txt 中的依赖。"
         ) from exc
     return torch, nn, F
 

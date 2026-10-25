@@ -2,7 +2,7 @@ import unittest
 
 import numpy as np
 
-from expression_deid.temporal import TemporalExpressionFilter
+from expression_deid.runtime.temporal import TemporalExpressionFilter
 
 
 def scores(label, confidence=0.90):
@@ -96,7 +96,7 @@ class TemporalExpressionTest(unittest.TestCase):
 class VideoTrackTest(unittest.TestCase):
     def test_roi_composite_matches_full_frame_and_keeps_background(self):
         from PIL import Image
-        from expression_deid.inference import ExpressionDeidentifier
+        from expression_deid.runtime.pipeline import ExpressionDeidentifier
         pipeline = ExpressionDeidentifier.__new__(ExpressionDeidentifier)
         rng = np.random.default_rng(17)
         gray = rng.integers(0, 256, (240, 320), dtype=np.uint8)
@@ -122,8 +122,8 @@ class VideoTrackTest(unittest.TestCase):
                     np.testing.assert_array_equal(actual[~rect], gray[~rect])
 
     def test_track_locks_donor_and_classifier_receives_only_edited_pixels(self):
-        from expression_deid.align import template_for
-        from expression_deid.video_demo import FastVideoRunner
+        from expression_deid.preprocessing.align import template_for
+        from expression_deid.runtime.video import FastVideoRunner
 
         face = np.zeros(15)
         face[:4] = (20, 20, 120, 120)
@@ -198,7 +198,7 @@ class VideoTrackTest(unittest.TestCase):
         self.assertEqual(pipeline.donor_calls, 3)
 
         from unittest.mock import patch
-        from expression_deid.inference import AnonymizationUnavailable
+        from expression_deid.runtime.pipeline import AnonymizationUnavailable
         previous_calls = len(pipeline.classified)
         with patch.object(pipeline, '_machine_runtime_candidate', side_effect=AnonymizationUnavailable('no resources')):
             hidden, info = runner.process_frame(rgb, 1, timestamp=1/30)
@@ -206,7 +206,7 @@ class VideoTrackTest(unittest.TestCase):
         self.assertEqual(info['status'], 'anonymization_unavailable')
         self.assertEqual(len(pipeline.classified), previous_calls)
 
-        from expression_deid.ganonymization_backend import FaceLandmarksUnavailable
+        from expression_deid.runtime.anonymization import FaceLandmarksUnavailable
 
         class Display:
             ganonymization_backend = object()
@@ -260,7 +260,7 @@ class VideoTrackTest(unittest.TestCase):
         self.assertEqual(len(quality.inputs), 5)
 
     def test_large_face_track_jump_is_not_same_track(self):
-        from expression_deid.video_demo import FastVideoRunner
+        from expression_deid.runtime.video import FastVideoRunner
         self.assertTrue(FastVideoRunner._same_track(np.array([10, 10, 100, 100]), np.array([13, 14, 100, 100])))
         self.assertFalse(FastVideoRunner._same_track(np.array([10, 10, 100, 100]), np.array([200, 10, 100, 100])))
 

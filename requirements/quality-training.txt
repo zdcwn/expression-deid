@@ -1,0 +1,3 @@
+onnx==1.23.2
+onnx2torch==1.5.15
+# Install requirements/training.txt first; the runtime needs no converter package.

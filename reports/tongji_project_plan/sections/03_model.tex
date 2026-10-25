@@ -1,13 +1,15 @@
 \section{系统设计与技术路线}
 \label{sec:model}
 \subsection{总体流程}
-拟将系统划分为采集与预处理、统一匿名化、匿名图表情识别和桌面展示四部分。输入先灰度化，再检测人脸并对齐；匿名化模块提供显示画面与标准灰度脸，后者作为表情模型的唯一输入，整体设计见图\ref{fig:pipeline}。
+拟将系统划分为采集与预处理、统一匿名化、匿名图表情识别和桌面展示四部分。输入先灰度化，再检测人脸并对齐；匿名化模块提供显示画面与标准灰度脸，后者作为表情模型的唯一输入，运行链路与工程职责对应，目录组织拟按图\ref{fig:structure}实施。
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=\linewidth]{pipeline_diagram.png}
-\caption{拟采用的车载匿名化与表情识别流程}
-\label{fig:pipeline}
+\includegraphics[width=\linewidth]{project_structure.pdf}
+\caption{拟采用的工程目录与职责分组}
+\label{fig:structure}
 \end{figure}
+
+预处理、训练、推理和桌面代码拟分别归入四个子包；训练候选与运行权重分开保存。固定示例输入放入 \path{examples/}，程序生成结果放入 \path{outputs/}，并以同一组检查入口核对各模块的衔接。
 
 \subsection{匿名化模块}
 拟使用五点对齐确定面部坐标，在眼眉、鼻部、嘴部及局部纹理区域编辑。软掩膜控制作用范围并合成回灰度画面，面部外区域保留原像素。训练目标兼顾像素变化范围、表情保持、身份抑制与局部平滑，通过项目内身份对照和表情标签共同选择候选。

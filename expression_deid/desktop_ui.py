@@ -3,7 +3,7 @@
 This command starts the native PySide6 desktop UI only.
 """
 
-from expression_deid.desktop_ui_qt import main
+from expression_deid.ui.desktop import main
 
 
 if __name__ == "__main__":

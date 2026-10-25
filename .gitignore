@@ -8,9 +8,8 @@ venv/
 *.pt
 *.pth
 *.onnx
-models/*.ckpt
-models/*.task
-models/anonymization_assets.json
+models/**/*.ckpt
+models/**/*.task
 datasets/kmu-fed-aligned/
 datasets/kmu-gan-aligned/
 datasets/kmu-gan-strength100/
@@ -26,23 +25,17 @@ datasets/kmu-machine-selected.run.log
 datasets/lfw-sklearn/
 datasets/lfw-gallery/
 outputs/
-external_ganonymization/
+third_party/ganonymization/
 .DS_Store
 Thumbs.db
 
-# Keep only the small handoff artifacts in Git. Large reports, videos and
-# checkpoints remain local and are recorded in handoff/asset_manifest.*.
+# Generated results and candidates stay local.
 !outputs/
 outputs/*
 !outputs/README.md
-!outputs/evaluation_machine_runtime_fast_strong_1681/
-outputs/evaluation_machine_runtime_fast_strong_1681/*
-!outputs/evaluation_machine_runtime_fast_strong_1681/evaluation.json
-!outputs/example_kmu_expressions.mp4
-!outputs/example_anger.mp4
-!outputs/example_surprise.mp4
-!outputs/example_mixed.mp4
-!models/README.md
+models/training/*
+!models/training/README.md
+models/anonymization/assets.json
 
 # The aligned KMU frames are the small runtime gallery used by the desktop
 # examples; larger derived caches remain ignored.
@@ -52,18 +45,18 @@ outputs/evaluation_machine_runtime_fast_strong_1681/*
 # The clean main branch carries only the current runtime weights.  The large
 # visual GAN is stored with Git LFS; legacy, identity-diagnostic and training
 # checkpoints remain local and are documented in models/README.md.
-!models/anonymizer_adversarial_v1.pt
-!models/expression_realtime_stable.pt
-!models/expression_machine_selector_texture.pt
-!models/expression_video_quality.ts.pt
-!models/face_detection_yunet_2023mar.onnx
-!models/face_landmarker.task
-!models/ganonymization_50.ckpt
+!models/anonymization/anonymizer_adversarial_v1.pt
+!models/expression/expression_realtime_stable.pt
+!models/expression/expression_machine_selector_texture.pt
+!models/expression/expression_video_quality.ts.pt
+!models/detection/face_detection_yunet_2023mar.onnx
+!models/detection/face_landmarker.task
+!models/anonymization/ganonymization_50.ckpt
 
 # Keep only the small architecture adapter needed by the optional GAN runtime.
-!external_ganonymization/
-external_ganonymization/*
-!external_ganonymization/LICENSE
-!external_ganonymization/lib/
-!external_ganonymization/lib/models/
-!external_ganonymization/lib/models/pix2pix.py
+!third_party/ganonymization/
+third_party/ganonymization/*
+!third_party/ganonymization/LICENSE
+!third_party/ganonymization/lib/
+!third_party/ganonymization/lib/models/
+!third_party/ganonymization/lib/models/pix2pix.py

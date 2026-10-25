@@ -4,9 +4,9 @@
 \subsection{计划采用的运行入口}
 项目拟统一使用 Python 桌面入口，并将依赖按训练、匿名化和界面分别整理。预期启动和检查命令如下，具体资源配置在实施阶段补齐。
 \begin{lstlisting}[language={},basicstyle=\ttfamily\small,breaklines=true,frame=none]
-python -m pip install -r requirements-train.txt
-python -m pip install -r requirements-anonymization.txt
-python -m pip install -r requirements-ui.txt
+python -m pip install -r requirements/training.txt
+python -m pip install -r requirements/anonymization.txt
+python -m pip install -r requirements/ui.txt
 python -m expression_deid.desktop_ui --device cuda
 \end{lstlisting}
 
