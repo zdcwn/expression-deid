@@ -19,7 +19,8 @@ expression-deid/
 ├─ scripts/                     按职责分组的命令脚本
 │  ├─ assets/  data/            下载资产、准备匿名训练数据
 │  ├─ training/  export/        训练候选、导出质量模型
-│  └─ checks/                   工程、桌面、视频与训练检查
+│  ├─ checks/                   工程、桌面、视频与训练检查
+│  └─ distribution/             Windows 软件打包与单文件发行
 ├─ datasets/                    数据源与对齐结果
 ├─ models/                      模型文件，按功能存放
 │  ├─ detection/                检测与关键点权重
@@ -38,6 +39,8 @@ expression-deid/
 [逐文件职责、训练产物和调用关系](docs/architecture/project-layout.md) · [模型清单](models/README.md) · [交接操作](docs/handoff.md) · [课程报告](reports/README.md)
 
 ## 启动桌面端
+
+无需配置环境的软件在 [GitHub Releases](https://github.com/zdcwn/expression-deid/releases/latest) 下载。CPU 版直接双击 `ExpressionLab-CPU.exe`。GPU 版下载 `ExpressionLab-GPU-Start.exe` 和全部三个 `.part` 分卷，放在同一个文件夹后双击启动文件，首次自动合并并校验；后续直接启动。两版都内置运行模型、全部 1,100 张带标签示例、4 段视频和依赖，不用执行下面的开发环境安装命令。发行构建与检查方法见 [Windows 桌面软件发行](docs/distribution/README.md)。
 
 在项目根目录执行，先用 Git LFS 拉取匿名化权重：
 

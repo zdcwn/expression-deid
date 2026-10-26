@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import time
 import threading
 from collections import deque
@@ -17,11 +18,11 @@ from pathlib import Path
 
 import cv2
 import numpy as np
-from PySide6.QtCore import QSize, Qt, QThread, QTimer, Signal, Slot
+from PySide6.QtCore import QPoint, QSize, Qt, QThread, QTimer, Signal, Slot
 from PySide6.QtGui import QIcon, QImage, QPixmap
 from PySide6.QtWidgets import (
     QApplication, QComboBox, QFrame, QHBoxLayout, QLabel,
-    QListWidget, QListWidgetItem, QMainWindow, QPushButton,
+    QListView, QListWidget, QListWidgetItem, QMainWindow, QPushButton,
     QFileDialog, QScrollArea, QStackedWidget, QVBoxLayout, QWidget, QProgressBar,
 )
 
@@ -63,11 +64,9 @@ def set_image(label: QLabel, array: np.ndarray, *, max_size: QSize | None = None
 
 def samples() -> list[dict]:
     manifest = KMU_ALIGNED_DIR / "manifest.jsonl"
-    # Keep several deterministic examples per class so the desktop experiment
-    # page exercises more than one image while still loading from the existing
-    # aligned manifest.  A small fixed cap keeps the initial list responsive.
+    # Register the complete valid gallery. Thumbnail loading is handled lazily
+    # by the view, rather than hiding images behind a per-class sample cap.
     result = {}
-    max_per_label = 4
     if not manifest.is_file():
         return []
     for line in manifest.read_text(encoding="utf-8").splitlines():
@@ -75,14 +74,18 @@ def samples() -> list[dict]:
             continue
         record = json.loads(line)
         label = int(record.get("label", -1))
-        path = (KMU_ALIGNED_DIR / str(record.get("output", ""))).resolve()
+        relative = Path(str(record.get("output", "")))
+        if relative.is_absolute() or relative.drive or '..' in relative.parts:
+            continue
+        # Windows may redirect a bundled file separately from its directory.
+        # Keep the validated logical path instead of comparing physical paths.
+        path = KMU_ALIGNED_DIR / relative
         if record.get('status') != 'ok' or not 0 <= label < 7:
             continue
-        if not path.is_file() or not path.is_relative_to(KMU_ALIGNED_DIR.resolve()):
+        if not path.is_file():
             continue
         bucket = result.setdefault(label, [])
-        if len(bucket) < max_per_label:
-            bucket.append({"label": label, "expression": record.get("expression", str(label)), "path": path, "source": record.get("source", path.name), "person": record.get("person", "")})
+        bucket.append({"label": label, "expression": record.get("expression", str(label)), "path": path, "source": record.get("source", path.name), "person": record.get("person", "")})
     return [item for key in sorted(result) for item in result[key]]
 
 
@@ -119,7 +122,7 @@ class ExperimentWorker(QThread):
     finished_all = Signal(int)
 
     def __init__(self, items: list[dict], device: str):
-        super().__init__(); self.items = items; self.device = device
+        super().__init__(); self.items = items; self.device = device; self.completed = 0
 
     def run(self):
         try:
@@ -129,34 +132,54 @@ class ExperimentWorker(QThread):
                 if self.isInterruptionRequested(): return
                 started = time.perf_counter()
                 result = pipeline.process(item["path"], aligned=True, diagnostics=False)
+                self.completed = index
                 self.result_ready.emit({"item": item, "result": result}, index, len(self.items), time.perf_counter() - started)
             self.finished_all.emit(len(self.items))
         except Exception as exc:  # pragma: no cover - dependent on local model files
+            logging.exception('Image analysis failed')
             self.error.emit(str(exc))
 
 
 class ExperimentPage(QWidget):
     def __init__(self, device: str):
         super().__init__(); self.device = device; self.items = samples(); self.worker = None
-        self.results = {}; self._build()
+        self.results = {}; self.rows_by_path = {}; self.loaded_thumbnails = set()
+        self.stop_requested = False
+        self.thumbnail_timer = QTimer(self); self.thumbnail_timer.setSingleShot(True)
+        self.thumbnail_timer.timeout.connect(self._load_visible_thumbnails)
+        self._build()
 
     def _build(self):
         root = QVBoxLayout(self); root.setContentsMargins(0, 0, 0, 0); root.setSpacing(16)
         heading = QHBoxLayout(); heading.addLayout(page_heading('01 / IMAGE EXPERIMENT', '看见变化，保留表情。', '选择带标签的座舱样本，比较匿名效果与实际识别结果。'), 1)
         self.run_button = QPushButton('分析全部样本'); self.run_button.setObjectName('primaryButton')
         self.run_button.setIcon(line_icon('play', '#ffffff')); self.run_button.clicked.connect(self.run_all)
-        heading.addWidget(self.run_button, 0, Qt.AlignBottom); root.addLayout(heading)
+        heading.addWidget(self.run_button, 0, Qt.AlignBottom)
+        self.stop_button = QPushButton('停止分析'); self.stop_button.setEnabled(False)
+        self.stop_button.clicked.connect(self.stop_analysis)
+        heading.addWidget(self.stop_button, 0, Qt.AlignBottom); root.addLayout(heading)
         content = QHBoxLayout(); content.setSpacing(16); root.addLayout(content, 1)
         sidebar = QFrame(); sidebar.setProperty('panel', True); sidebar.setFixedWidth(198)
         left = QVBoxLayout(sidebar); left.setContentsMargins(12, 16, 12, 14); left.setSpacing(8)
         left.addWidget(label('示例图库', 'panelTitle'))
-        left.addWidget(label(f'{len(self.items):02d} 个样本 · KMU', 'panelNote'))
+        self.gallery_count = label(f'{len(self.items):,} 张 · 完整图库', 'panelNote')
+        left.addWidget(self.gallery_count)
+        self.expression_filter = QComboBox()
+        self.expression_filter.addItem('全部表情', None)
+        for expression in sorted({item['label'] for item in self.items}):
+            self.expression_filter.addItem(EXPRESSION_ZH[expression], expression)
+        left.addWidget(self.expression_filter)
         self.sample_list = QListWidget(); self.sample_list.setObjectName("sampleList")
         self.sample_list.setIconSize(QSize(46, 46)); self.sample_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.sample_list.setUniformItemSizes(True)
+        # Text rows are cheap; finish their geometry before selection/scrolling.
+        # Batched layout can leave late rows unreachable just after filtering.
+        self.sample_list.setLayoutMode(QListView.SinglePass)
         for index, item in enumerate(self.items, start=1):
             row = QListWidgetItem(f"{EXPRESSION_ZH[item['label']]}\n样本 {index:02d} · {item['person']}")
-            row.setIcon(QIcon(str(item['path']))); row.setSizeHint(QSize(164, 70))
+            row.setSizeHint(QSize(164, 70))
             row.setData(Qt.UserRole, item); self.sample_list.addItem(row)
+            self.rows_by_path[str(item['path'])] = row
         left.addWidget(self.sample_list, 1)
         self.exp_progress = QProgressBar(); self.exp_progress.setTextVisible(False)
         self.exp_progress.setRange(0, max(1, len(self.items))); self.exp_progress.setValue(0); left.addWidget(self.exp_progress)
@@ -180,8 +203,65 @@ class ExperimentPage(QWidget):
         self.detail_line = label('匿名化与表情结果将在分析完成后显示。', 'detailLine', wrap=True)
         detail.addWidget(self.metric_line); detail.addWidget(self.detail_line); root.addWidget(footer)
         self.sample_list.itemClicked.connect(self.run_selected)
+        self.expression_filter.currentIndexChanged.connect(self._filter_samples)
+        self.sample_list.verticalScrollBar().valueChanged.connect(lambda _: self.thumbnail_timer.start(30))
+        self.sample_list.verticalScrollBar().rangeChanged.connect(lambda *_: self.thumbnail_timer.start(30))
         if self.items:
             self.sample_list.setCurrentRow(0); self._preview_source(self.items[0])
+
+    def showEvent(self, event):
+        super().showEvent(event); self.thumbnail_timer.start(0)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event); self.thumbnail_timer.start(30)
+
+    def _load_visible_thumbnails(self):
+        viewport = self.sample_list.viewport()
+        first = max(0, self.sample_list.indexAt(QPoint(2, 2)).row())
+        budget = max(2, viewport.height() // 70 + 3)
+        visible = 0
+        for index in range(first, self.sample_list.count()):
+            row = self.sample_list.item(index)
+            if row.isHidden():
+                continue
+            if visible >= budget:
+                break
+            visible += 1
+            path = str(row.data(Qt.UserRole)['path'])
+            if path not in self.loaded_thumbnails:
+                pixmap = QPixmap(path)
+                if not pixmap.isNull():
+                    row.setIcon(QIcon(pixmap.scaled(46, 46, Qt.KeepAspectRatio, Qt.SmoothTransformation)))
+                    self.loaded_thumbnails.add(path)
+
+    def filtered_samples(self):
+        expression = self.expression_filter.currentData()
+        return [item for item in self.items if expression is None or item['label'] == expression]
+
+    def _filter_samples(self):
+        expression = self.expression_filter.currentData()
+        for item in self.items:
+            self.rows_by_path[str(item['path'])].setHidden(expression is not None and item['label'] != expression)
+        items = self.filtered_samples()
+        self.gallery_count.setText(f'{len(items):,} / {len(self.items):,} 张 · KMU')
+        self.run_button.setText('分析全部样本' if expression is None else '分析当前类别')
+        if items:
+            row = self.rows_by_path[str(items[0]['path'])]
+            self.sample_list.setCurrentItem(row); self.sample_list.scrollToItem(row)
+            self._preview_source(items[0])
+            cached = self.results.get(str(items[0]['path']))
+            if cached:
+                self._show_result(*cached)
+            else:
+                self.anonymized_view[1].clear_image('点击样本开始分析')
+                self.anonymized_view[0].set_caption('ANONYMIZED / FACE EDIT')
+                for card in (self.prediction_card, self.confidence_card, self.privacy_card): card.set_value('—')
+                self.metric_line.setText('对照结果将在分析完成后显示。')
+                self.detail_line.setText('匿名化与表情结果将在分析完成后显示。')
+        self.exp_progress.setRange(0, max(1, len(items)))
+        self.exp_progress.setValue(sum(str(item['path']) in self.results for item in items))
+        self.exp_status.setText(f'当前类别 {len(items):,} 张 · 点击样本开始分析')
+        self.thumbnail_timer.start(0)
 
     def _preview_source(self, item):
         set_image(self.original_view[1], np.asarray(_image_frame(item['path'])))
@@ -195,12 +275,27 @@ class ExperimentPage(QWidget):
             item = row.data(Qt.UserRole); cached = self.results.get(str(item['path']))
             if cached:
                 self._show_result(*cached)
-                self.exp_progress.setRange(0,len(self.items)); self.exp_progress.setValue(len(self.results))
+                items = self.filtered_samples()
+                self.exp_progress.setRange(0,len(items)); self.exp_progress.setValue(sum(str(i['path']) in self.results for i in items))
                 self.exp_status.setText(f'已分析 {len(self.results)} 张 · 正在查看所选样本')
             else: self._start([item])
 
     @Slot()
-    def run_all(self): self._start(self.items)
+    def run_all(self): self._start(self.filtered_samples())
+
+    def stop_analysis(self):
+        if self.worker and self.worker.isRunning():
+            self.stop_requested = True; self.worker.requestInterruption()
+            self.stop_button.setEnabled(False)
+            self.exp_status.setText('正在停止，完成当前图片后结束…')
+
+    def _worker_finished(self):
+        if self.sender() is not self.worker:
+            return
+        self.run_button.setEnabled(True); self.stop_button.setEnabled(False)
+        self.expression_filter.setEnabled(True)
+        if self.stop_requested:
+            self.exp_status.setText(f'已停止 · 本轮完成 {self.worker.completed} 张，结果已保留')
 
     def _start(self, items):
         if self.worker and self.worker.isRunning(): return
@@ -210,19 +305,20 @@ class ExperimentPage(QWidget):
         for card in (self.prediction_card, self.confidence_card, self.privacy_card): card.set_value('—')
         self.metric_line.setText('正在分析匿名结果…'); self.detail_line.setText('匿名化与表情结果将在分析完成后显示。')
         self.exp_progress.setRange(0, len(items)); self.exp_progress.setValue(0)
-        self.run_button.setEnabled(False); self.exp_status.setText("正在加载匿名化与表情模型…")
+        self.stop_requested = False
+        self.run_button.setEnabled(False); self.stop_button.setEnabled(True)
+        self.expression_filter.setEnabled(False); self.exp_status.setText("正在加载匿名化与表情模型…")
         self.worker = ExperimentWorker(items, self.device); self.worker.result_ready.connect(self._show_result); self.worker.error.connect(self._error); self.worker.finished_all.connect(self._finished)
-        self.worker.finished.connect(lambda: self.run_button.setEnabled(True))
+        self.worker.finished.connect(self._worker_finished)
         self.worker.start()
 
     @Slot(object, int, int, float)
     def _show_result(self, payload, index, total, elapsed):
         item, result = payload["item"], payload["result"]
         self.results[str(item['path'])] = (payload, index, total, elapsed)
-        for row_index in range(self.sample_list.count()):
-            row = self.sample_list.item(row_index)
-            if row.data(Qt.UserRole)['path'] == item['path']:
-                self.sample_list.setCurrentRow(row_index); break
+        row = self.rows_by_path.get(str(item['path']))
+        if row is not None:
+            self.sample_list.setCurrentItem(row)
         self._preview_source(item)
         set_image(self.anonymized_view[1], result["anonymized"], max_size=self.anonymized_view[1].size())
         exp = result.get("expression_anonymized", {})
@@ -315,7 +411,9 @@ class VideoWorker(QThread):
                     elif delay < -1.0:
                         next_video_tick = time.perf_counter()
             self.ended.emit()
-        except Exception as exc: self.worker_error.emit(str(exc))
+        except Exception as exc:
+            logging.exception('Video analysis failed')
+            self.worker_error.emit(str(exc))
         finally:
             if capture is not None: capture.release()
             if display_pipeline is not None and display_pipeline is not pipeline: display_pipeline.close()
@@ -532,10 +630,10 @@ class MainWindow(QMainWindow):
     def __init__(self, device: str):
         super().__init__(); ensure_fonts(); self.device = device
         self.setWindowTitle('Expression Lab · 座舱隐私实验台'); self.setWindowIcon(line_icon('face'))
-        self.resize(1460, 940); self.setMinimumSize(1100, 760); self.setStyleSheet(STYLESHEET)
+        self.resize(1460, 940); self.setMinimumSize(760, 520); self.setStyleSheet(STYLESHEET)
         if self.screen() is not None:
             available=self.screen().availableGeometry()
-            self.resize(min(1460,max(1100,available.width()-48)),min(940,max(760,available.height()-56)))
+            self.resize(min(1460,max(760,available.width()-48)),min(940,max(520,available.height()-56)))
             self.move(available.left()+max(0,(available.width()-self.width())//2),available.top()+max(0,(available.height()-self.height())//2))
         shell = QWidget(); layout = QHBoxLayout(shell); layout.setContentsMargins(0, 0, 0, 0); layout.setSpacing(0); self.setCentralWidget(shell)
         nav = QFrame(); nav.setObjectName('sidebar'); nav.setFixedWidth(202)
@@ -544,7 +642,13 @@ class MainWindow(QMainWindow):
         nav_layout.addWidget(label('expression.','brand')); nav_layout.addWidget(label('座舱隐私实验台','brandSub'))
         nav_layout.addSpacing(36); nav_layout.addWidget(label('WORKSPACE','navSection')); nav_layout.addSpacing(4)
         self.stack = QStackedWidget(); self.pages = [ExperimentPage(device), VideoPage(device), PerformancePage(device)]
-        for page in self.pages: self.stack.addWidget(page)
+        # Keep controls reachable on small/high-DPI displays without clipping.
+        for page in self.pages:
+            scroll = QScrollArea()
+            scroll.setWidgetResizable(True)
+            scroll.setFrameShape(QFrame.NoFrame)
+            scroll.setWidget(page)
+            self.stack.addWidget(scroll)
         self.nav_buttons = []
         self.nav_icons=('image','video','chart')
         for index,text in enumerate(('图片实验','实时分析','模型表现')):

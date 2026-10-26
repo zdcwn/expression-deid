@@ -1,0 +1,7 @@
+# Smaller offline desktop edition; keeps the same inference models and media.
+-r base.txt
+-r anonymization.txt
+-r ui.txt
+-r distribution.txt
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.11.0+cpu

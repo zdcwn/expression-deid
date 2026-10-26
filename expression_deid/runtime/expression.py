@@ -66,7 +66,10 @@ class QualityExpressionPredictor:
             if digest != asset['sha256']:
                 raise ValueError(f'准确模式权重校验失败：{file.name}')
             assets[key] = file
-        self.quality = torch.jit.load(str(assets['quality_model']), map_location=self.device).eval()
+        # TorchScript's native fopen does not reliably handle Chinese Windows
+        # profile/MSIX paths. Python opens the same checked bytes correctly.
+        with assets['quality_model'].open('rb') as stream:
+            self.quality = torch.jit.load(stream, map_location=self.device).eval()
         self.compact, _ = load_checkpoint(assets['compact_model'], device=self.device)
         self.compact.float().eval()
 

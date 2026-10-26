@@ -1,4 +1,5 @@
 import hashlib
+import io
 import json
 from pathlib import Path
 import tempfile
@@ -24,6 +25,22 @@ class SequenceLogits(torch.nn.Module):
 
 
 class QualityExpressionTests(unittest.TestCase):
+    def test_real_torchscript_loads_from_unicode_release_path(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            folder=Path(temporary)/'中文软件 运行目录';folder.mkdir()
+            manifest=self.manifest(folder)
+            module=torch.jit.trace(FixedLogits([0,0,0,0,0,0,2]),torch.zeros((2,3,260,260)))
+            buffer=io.BytesIO();torch.jit.save(module,buffer)
+            asset=folder/'质量表情模型.pt';asset.write_bytes(buffer.getvalue())
+            data=json.loads(manifest.read_text())
+            data['quality_model']={'file':asset.name,'sha256':hashlib.sha256(asset.read_bytes()).hexdigest()}
+            manifest.write_text(json.dumps(data),encoding='utf-8')
+            with patch('expression_deid.runtime.expression.load_checkpoint',return_value=(FixedLogits([0,0,0,0,0,0,2]),{})):
+                model=QualityExpressionPredictor(manifest=manifest)
+            prediction=model.predict_anonymous(np.full((100,100),100,np.uint8),input_source='anonymized_only')
+            self.assertEqual(prediction['label'],6)
+            self.assertTrue(np.isfinite(prediction['probabilities']).all())
+
     def manifest(self, folder, **changes):
         asset=Path(folder)/'weights';asset.write_bytes(b'checked fixture')
         data=dict(schema=1, expression_input_source='anonymized_only', class_names=list(EXPRESSION_NAMES),

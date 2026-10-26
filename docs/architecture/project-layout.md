@@ -116,3 +116,9 @@ python scripts/checks/check_desktop_presentation.py --device cuda
 ```
 
 训练检查需要已准备的匿名缓存；它验证训练入口、梯度和检查点读写，不作为模型准确率。详细评价由具体数据集和质量验证脚本完成。结构整理不改变数据集划分、匿名化算法和已经发布的模型指标。
+
+## 六、桌面软件发行
+
+`scripts/distribution/` 负责 Windows 运行库收集、资源完整性清单、冻结可执行程序和单文件启动版。`expression_deid/distribution.py` 管理设备探测、资源检查与当前用户日志目录；`distribution_check.py` 在成品程序内验证图片、视频、界面和退出，不依赖源代码运行环境。中文回退字体与许可放在 `expression_deid/ui/assets/`。
+
+单文件版首次自动展开到当前用户目录，之后复用缓存；便携 ZIP 完整解压后启动。发行配置只纳入当前运行权重、示例图库、示例视频、指标和许可，不收集训练产物与本地实验记录。构建和验证步骤见 `docs/distribution/README.md`。

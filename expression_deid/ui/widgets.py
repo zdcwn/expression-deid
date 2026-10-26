@@ -24,6 +24,11 @@ def ensure_fonts():
     for name in ('msyh.ttc', 'msyhbd.ttc', 'segoeui.ttf', 'segoeuib.ttf'):
         if (folder / name).is_file():
             QFontDatabase.addApplicationFont(str(folder / name))
+    # The release remains readable on Windows installations without CJK fonts.
+    bundled = Path(__file__).resolve().parent / 'assets' / 'NotoSansSC.ttf'
+    if bundled.is_file():
+        QFontDatabase.addApplicationFont(str(bundled))
+        QFont.insertSubstitutions('Microsoft YaHei UI', ['Noto Sans SC'])
     ensure_fonts._loaded = True
 
 
