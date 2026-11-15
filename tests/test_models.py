@@ -8,7 +8,7 @@ import numpy as np
 from expression_deid.training.data import split_indices, split_ppb_people
 from expression_deid.training.evaluate import summarize
 from expression_deid.runtime.pipeline import ExpressionDeidentifier
-from expression_deid.training.train import _expression_preservation_losses
+from expression_deid.training.required_training import anonymous_supervision
 try:
     from expression_deid.models import AnonymizerUNet, ExpressionNet, IdentityNet, load_checkpoint, save_checkpoint
 except RuntimeError as exc:  # PyTorch is optional for preprocessing users.
@@ -44,6 +44,34 @@ class ModelTest(unittest.TestCase):
             for left, right in zip(model.parameters(), loaded.parameters()):
                 self.assertTrue(np.array_equal(left.detach().numpy(), right.detach().numpy()))
 
+    def test_transfer_heads_roundtrip_without_downloading(self):
+        from expression_deid.models import model_class
+        torch=self.torch
+        for kind,name,classes in [('identity','TransferIdentityNet',5)]:
+            model=model_class(name)(classes).eval()
+            x=torch.zeros(1,1,100,100)
+            with torch.inference_mode(): expected=model(x)
+            self.assertEqual(tuple(expected.shape),(1,classes))
+            with tempfile.TemporaryDirectory() as folder:
+                path=Path(folder)/'model.pt'
+                save_checkpoint(model,path,kind=kind)
+                actual,metadata=load_checkpoint(path)
+                with torch.inference_mode(): torch.testing.assert_close(actual(x),expected)
+                self.assertIn('resnet18_gray',metadata['model_config']['architecture'])
+
+    def test_pretrained_gray_stem_matches_repeated_gray_rgb(self):
+        from expression_deid.models import model_class
+        from torchvision.models import resnet18
+        torch=self.torch; reference=resnet18(weights=None).eval()
+        model=model_class('TransferIdentityNet')(5).eval()
+        model.backbone.initialize_imagenet(reference.state_dict())
+        gray=torch.rand(1,1,160,160)
+        with torch.inference_mode():
+            expected=reference.conv1(gray.repeat(1,3,1,1))
+            actual=model.backbone.features[0](gray)
+        torch.testing.assert_close(actual,expected,atol=2e-6,rtol=2e-5)
+
+
     def test_split_is_deterministic_and_disjoint(self):
         train, valid = split_indices(20, 0.25, seed=4)
         train_again, valid_again = split_indices(20, 0.25, seed=4)
@@ -66,14 +94,13 @@ class ModelTest(unittest.TestCase):
         self.assertEqual(result["expression_consistency"], 0.5)
         self.assertEqual(result["identity_prediction_change_rate"], 0.5)
 
-    def test_expression_loss_prefers_original_prediction(self):
+    def test_expression_supervision_requires_anonymous_inputs(self):
         torch = self.torch
-        original = torch.tensor([[4.0, 0.0, 0.0], [0.0, 4.0, 0.0]])
-        same = original.clone()
-        different = torch.tensor([[0.0, 4.0, 0.0], [4.0, 0.0, 0.0]])
-        same_loss = _expression_preservation_losses(original, same, torch.tensor([0, 1]))[0]
-        different_loss = _expression_preservation_losses(original, different, torch.tensor([0, 1]))[0]
-        self.assertLess(float(same_loss), float(different_loss))
+        logits = torch.tensor([[4.0, 0.0, 0.0], [0.0, 4.0, 0.0]])
+        with self.assertRaises(ValueError):
+            anonymous_supervision(logits,torch.tensor([0,1]),input_source='original')
+        loss=anonymous_supervision(logits,torch.tensor([0,1]),input_source='anonymized_only')
+        self.assertTrue(torch.isfinite(loss))
 
     def test_reference_face_excludes_original_identity(self):
         first = np.zeros((100, 100), dtype=np.float32)

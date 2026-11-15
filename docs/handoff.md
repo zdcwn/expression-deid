@@ -17,7 +17,7 @@
 
 ## 替换模型
 
-训练输出保存在 `models/training/`。先使用同一组验证输入比较候选，再将选中权重部署到 `models/anonymization/` 或 `models/expression/`。质量模型必须连同 JSON 和其引用的权重一起核对。桌面端不会自动加载训练目录中的候选。
+训练输出保存在 `models/training/`。先使用同一组验证输入比较候选，再将选中权重部署到 `models/anonymization/` 或 `models/expression/`。当前运行资源见 `configs/runtime_models.json`，表情使用 `expression_current.pt`；复测读取 `check_current_expression.py` 的 FER/KMU/RAF 完整运行缓存，组件诊断结果单独记录。桌面端不会自动加载训练目录中的候选。
 
 ## 提交前检查
 

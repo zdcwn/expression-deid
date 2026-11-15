@@ -8,42 +8,24 @@ from pathlib import Path
 
 from PIL import Image
 
-from expression_deid.preprocessing import prepare
-from expression_deid.preprocessing import prepare_ppb
 from expression_deid.config import ROOT
-from expression_deid.training.evaluate import build_parser as build_evaluate_parser
+from expression_deid.training.required_evaluate import build_parser as build_evaluate_parser
 from expression_deid.runtime.pipeline import ExpressionDeidentifier
 from expression_deid.training.train import build_parser as build_train_parser
 from expression_deid.runtime.video import run_camera, run_video
 
 
 def _run_prepare(args):
-    argv = []
-    if args.limit:
-        argv += ["--limit", str(args.limit)]
-    if args.recompute_stats:
-        argv.append("--recompute-stats")
-    if args.stats_only:
-        argv.append("--stats-only")
-    prepare.main(argv)
-
-
-def _run_prepare_ppb(args):
-    argv = ["--frames-per-video", str(args.frames_per_video)]
-    if args.source_dir:
-        argv += ["--source-dir", args.source_dir]
-    if args.output_dir:
-        argv += ["--output-dir", args.output_dir]
-    return prepare_ppb.main(argv)
+    from expression_deid.training.required_data import prepare_required,load_policy
+    policy=load_policy()
+    names=['pins','celebahq','fer2013']+policy['expression']['auxiliary'] if args.dataset=='all' else [args.dataset]
+    return {name:prepare_required(name,workers=args.workers,limit=args.limit) for name in names}
 
 
 def _run_infer(args):
     pipeline = ExpressionDeidentifier(
         args.anonymizer_checkpoint, args.expression_checkpoint,
-        args.identity_checkpoint, device=args.device,
-        fast_mode=not args.expression_ensemble,
-        ganonymization_checkpoint=args.ganonymization_checkpoint,
-        ganonymization_repo=args.ganonymization_repo,
+        args.identity_checkpoint, device=args.device, fast_mode=False,
     )
     try:
         source = Path(args.input)
@@ -54,7 +36,7 @@ def _run_infer(args):
         target.mkdir(parents=True, exist_ok=True)
         rows = []
         for path in paths:
-            result = pipeline.process(path)
+            result = pipeline.process(path,aligned=args.aligned,diagnostics=args.identity_checkpoint is not None)
             anonymized = result.pop("anonymized")
             result.pop("original", None)
             out_image = target / f"{path.stem}.png"
@@ -89,15 +71,18 @@ def _run_camera(args):
 def build_parser():
     parser = argparse.ArgumentParser(prog="python -m expression_deid", description="座舱人脸去标识项目工具")
     subparsers = parser.add_subparsers(dest="command", required=True)
-    p = subparsers.add_parser("prepare", help="计算统计量并对齐 KMU")
-    p.add_argument("--limit", type=int, default=0); p.add_argument("--recompute-stats", action="store_true"); p.add_argument("--stats-only", action="store_true"); p.set_defaults(func=_run_prepare)
-    p = subparsers.add_parser("prepare-ppb", help="抽取并对齐 PPB-Emo 中央红外中性帧")
-    p.add_argument("--source-dir", default=None); p.add_argument("--output-dir", default=None); p.add_argument("--frames-per-video", type=int, default=5)
-    p.set_defaults(func=_run_prepare_ppb)
+    p = subparsers.add_parser("prepare", help="准备指定的 CelebA-HQ、FER-2013、Pins 和已选辅助集")
+    p.add_argument('--dataset',choices=['pins','celebahq','fer2013','kmu','ppb-emo','raf','affectnet','all'],default='all')
+    p.add_argument('--workers',type=int,default=6); p.add_argument('--limit',type=int,default=0); p.set_defaults(func=_run_prepare)
     build_train_parser(subparsers)
     build_evaluate_parser(subparsers)
     p = subparsers.add_parser("infer", help="对单张图或目录做匿名化和表情识别")
-    p.add_argument("--anonymizer-checkpoint", required=True); p.add_argument("--expression-checkpoint", required=True); p.add_argument("--identity-checkpoint"); p.add_argument("--ganonymization-checkpoint", help="可选：GANonymization 的 landmark-only 生成器检查点"); p.add_argument("--ganonymization-repo", help="GANonymization 源码目录"); p.add_argument("--input", required=True); p.add_argument("--output", default="outputs/inference"); p.add_argument("--pattern", default="*.jpg"); p.add_argument("--device", default="cpu"); p.add_argument('--expression-ensemble',action='store_true',help='显式加入旧 RAF/joint 辅助模型；默认只使用指定检查点'); p.set_defaults(func=_run_infer)
+    p.add_argument('--anonymizer-checkpoint',default=str(ROOT/'models/anonymization/anonymizer_celebahq.pt'))
+    p.add_argument('--expression-checkpoint',default=str(ROOT/'models/expression/expression_current.pt'))
+    p.add_argument('--identity-checkpoint'); p.add_argument('--input',required=True)
+    p.add_argument('--output',default='outputs/inference'); p.add_argument('--pattern',default='*.jpg')
+    p.add_argument('--device',choices=['auto','cpu','cuda'],default='auto'); p.add_argument('--aligned',action='store_true')
+    p.set_defaults(func=_run_infer)
     p = subparsers.add_parser("video", help="Python 视频匿名化与匿名图表情演示")
     p.add_argument("--input", required=True); p.add_argument("--output", default="outputs/video_demo.mp4"); p.add_argument("--telemetry"); p.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto"); p.add_argument("--detect-interval", type=int, default=5); p.add_argument("--limit", type=int, default=0); p.add_argument("--ganonymization-checkpoint", help="可选；模型文件存在时默认使用 models/anonymization/ganonymization_50.ckpt"); p.add_argument("--ganonymization-repo", help="可选；默认使用项目内 third_party/ganonymization"); p.add_argument("--expression-checkpoint", default=None); p.set_defaults(func=_run_video)
     p = subparsers.add_parser("camera", help="Python 本地摄像头实时匿名化与表情演示")

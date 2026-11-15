@@ -18,7 +18,8 @@ class TemporalExpressionFilter:
     def __init__(self, *, time_constant=0.30, min_confidence=0.50,
                  min_margin=0.12, hold_confidence=0.30, hold_margin=0.03,
                  switch_seconds=0.25, initial_seconds=0.10,
-                 uncertain_seconds=0.90, reset_gap=0.75, min_observations=2):
+                 uncertain_seconds=0.90, reset_gap=0.75, min_observations=2,
+                 class_min_confidence=None, class_min_margin=None):
         self.time_constant = float(time_constant)
         self.min_confidence = float(min_confidence)
         self.min_margin = float(min_margin)
@@ -29,6 +30,8 @@ class TemporalExpressionFilter:
         self.uncertain_seconds = float(uncertain_seconds)
         self.reset_gap = float(reset_gap)
         self.min_observations = int(min_observations)
+        self.class_min_confidence = self._class_thresholds(class_min_confidence, 'confidence')
+        self.class_min_margin = self._class_thresholds(class_min_margin, 'margin')
         if (not all(math.isfinite(v) for v in (self.time_constant, self.min_confidence,
                 self.min_margin, self.switch_seconds, self.initial_seconds,
                 self.uncertain_seconds, self.reset_gap,
@@ -41,6 +44,24 @@ class TemporalExpressionFilter:
                 or self.min_observations < 2):
             raise ValueError("Invalid temporal expression filter parameters")
         self.reset()
+
+    @staticmethod
+    def _class_thresholds(values, name):
+        if values is None:
+            return {}
+        if not isinstance(values, dict):
+            raise ValueError(f"class_{name} must be a dictionary")
+        result = {}
+        for key, value in values.items():
+            try:
+                index = int(key)
+                number = float(value)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"Invalid class_{name} threshold") from exc
+            if index < 0 or not math.isfinite(number) or not 0 <= number <= 1:
+                raise ValueError(f"Invalid class_{name} threshold")
+            result[index] = number
+        return result
 
     def reset(self):
         self.probabilities = None
@@ -73,11 +94,13 @@ class TemporalExpressionFilter:
         best = int(self.probabilities.argmax())
         second = float(np.partition(self.probabilities, -2)[-2])
         margin = float(self.probabilities[best] - second)
+        min_confidence = self.class_min_confidence.get(best, self.min_confidence)
+        min_margin = self.class_min_margin.get(best, self.min_margin)
         # Current-frame support prevents the averaging tail from counting as
         # fresh evidence when the face or expression has already changed.
-        supported = (self.probabilities[best] >= self.min_confidence
-                     and margin >= self.min_margin
-                     and values.argmax() == best and values[best] >= self.min_confidence)
+        supported = (self.probabilities[best] >= min_confidence
+                     and margin >= min_margin
+                     and values.argmax() == best and values[best] >= min_confidence)
         if supported and best != self.label:
             if self.pending_label != best:
                 self.pending_label, self.pending_since, self.pending_count = best, timestamp, 1

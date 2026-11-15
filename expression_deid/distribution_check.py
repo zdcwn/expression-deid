@@ -39,6 +39,23 @@ def main(argv=None) -> int:
         result['device'] = device
         record('device_probe', description=description)
 
+        selected=json.loads((resource_root()/'configs/runtime_models.json').read_text(encoding='utf-8'))
+        from expression_deid.models import load_checkpoint
+        expression_path=resource_root()/selected['expression']['current']
+        _,expression_meta=load_checkpoint(expression_path,device='cpu')
+        recipe=expression_meta['metrics']['datasets']
+        if recipe.get('primary')!='fer2013' or recipe.get('auxiliary')!=['kmu']:
+            raise AssertionError('The packaged expression model is not the selected FER-primary model')
+        import hashlib
+        if hashlib.sha256(expression_path.read_bytes()).hexdigest()!=selected['expression_sha256']:
+            raise AssertionError('The packaged expression model differs from the reviewed model')
+        record('fer_primary_runtime_contract', datasets=recipe, sha256=selected['expression_sha256'])
+        identity,identity_meta=load_checkpoint(resource_root()/selected['identity']['file'],device='cpu')
+        if identity_meta['metrics']['datasets']['primary']!='pins' or identity.classifier.out_features!=105:
+            raise AssertionError('The packaged identity model is not the selected Pins model')
+        record('selected_identity_model_loads', classes=identity.classifier.out_features)
+        del identity
+
         import cv2
         import numpy as np
         import torch
@@ -151,7 +168,7 @@ def main(argv=None) -> int:
             torch.cuda.empty_cache()
 
         window.select_page(1)
-        for mode in ['fast', 'quality']:
+        for mode in ['fast']:
             video_page = window.pages[1]
             video_page.mode_combo.setCurrentIndex(0 if mode == 'fast' else 1)
             video_page._start(('video', str(videos[0])), f'打包检查 · {mode}')

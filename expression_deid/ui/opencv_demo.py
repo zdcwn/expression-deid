@@ -33,28 +33,24 @@ from expression_deid.runtime.pipeline import ExpressionDeidentifier
 from expression_deid.runtime.video import FastVideoRunner
 
 
-def _pick_checkpoint(candidates: tuple[Path, ...]) -> Path:
-    for candidate in candidates:
-        if candidate.is_file():
-            return candidate
-    return candidates[-1]
-
-
-def build_pipeline(device: str, *, use_gan: bool = True, expression_checkpoint: str | Path | None = None) -> ExpressionDeidentifier:
-    """Load the validated fast models without loading the identity verifier."""
-    anonymizer = _pick_checkpoint((
-        ROOT / "models/anonymization/anonymizer_adversarial_v1.pt",
-        ROOT / "models/training/anonymizer.pt",
-    ))
+def build_pipeline(
+    device: str,
+    *,
+    use_gan: bool = True,
+    expression_checkpoint: str | Path | None = None,
+    fast_mode: bool = True,
+) -> ExpressionDeidentifier:
+    """Load the current Python expression pipeline without the identity verifier."""
+    current_expression = ROOT / "models/expression/expression_current.pt"
+    current_anonymizer = ROOT / "models/anonymization/anonymizer_celebahq.pt"
+    anonymizer = current_anonymizer
+    expression = Path(expression_checkpoint) if expression_checkpoint else current_expression
+    for checkpoint in (anonymizer, expression):
+        if not checkpoint.is_file():
+            raise FileNotFoundError(f'当前运行模型缺失：{checkpoint}')
     gan_checkpoint = ROOT / "models/anonymization/ganonymization_50.ckpt"
     gan_repo = ROOT / "third_party/ganonymization"
     use_gan = bool(use_gan and gan_checkpoint.is_file() and gan_repo.is_dir())
-    # Keep fallback selection inside the published runtime set.  Historical
-    # GAN-adapted checkpoints are intentionally not part of the main branch.
-    candidates = (ROOT / "models/expression/expression_machine_selector_texture.pt",)
-    if not use_gan:
-        candidates = (ROOT / "models/expression/expression_realtime_stable.pt", *candidates)
-    expression = Path(expression_checkpoint) if expression_checkpoint else _pick_checkpoint(candidates)
     import torch
 
     resolved_device = device
@@ -67,7 +63,7 @@ def build_pipeline(device: str, *, use_gan: bool = True, expression_checkpoint: 
         expression,
         identity_checkpoint=None,
         device=resolved_device,
-        fast_mode=True,
+        fast_mode=bool(fast_mode),
         ganonymization_checkpoint=gan_checkpoint if use_gan else None,
         ganonymization_repo=gan_repo if use_gan else None,
     )
@@ -158,8 +154,32 @@ def run_image(pipeline: ExpressionDeidentifier, path: Path, *, device: str, exam
 
 
 def run_stream(pipeline: ExpressionDeidentifier, capture: cv2.VideoCapture, *, device: str, detect_interval: int, max_width: int, source_fps: float | None = None) -> int:
-    display = build_pipeline(device, use_gan=True) if pipeline.ganonymization_backend is None else pipeline
-    runner = FastVideoRunner(pipeline, detect_interval=detect_interval, display_pipeline=display, display_interval=15)
+    display = build_pipeline(
+        device,
+        use_gan=True,
+        fast_mode=True,
+    ) if pipeline.ganonymization_backend is None else pipeline
+    runner = FastVideoRunner(
+        pipeline,
+        detect_interval=detect_interval,
+        display_pipeline=display,
+        display_interval=12,
+        track_reset_gap=2.5,
+        max_detection_misses=3,
+        filter_kwargs={
+            "time_constant": 0.35,
+            "min_confidence": 0.36,
+            "min_margin": 0.05,
+            "hold_confidence": 0.22,
+            "hold_margin": 0.01,
+            "switch_seconds": 0.28,
+            "initial_seconds": 0.08,
+            "uncertain_seconds": 2.0,
+            "min_observations": 2,
+            "class_min_confidence": {6: 0.32},
+            "class_min_margin": {6: 0.03},
+        },
+    )
     frame_index = 0
     started = time.perf_counter()
     analysis_times = deque(maxlen=24)
@@ -229,7 +249,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
     parser.add_argument("--detect-interval", type=int, default=5, help="视频模式每隔多少帧重新检测人脸")
     parser.add_argument("--max-width", type=int, default=960, help="处理前把视频帧缩到的最大宽度，降低延迟")
-    parser.add_argument("--stream-quality", choices=("fast", "quality"), default="fast", help="视频/摄像头：fast 使用轻量局部编辑，quality 启用 landmark-only 生成器")
     parser.add_argument("--expression-checkpoint", help="显式指定表情权重，用于复测或回退")
     return parser
 
@@ -238,8 +257,14 @@ def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
     if args.mode in {"video", "image"} and not args.input:
         raise SystemExit(f"--mode {args.mode} 需要同时提供 --input")
-    use_gan = args.mode in {"image", "examples"} or args.stream_quality == "quality"
-    pipeline = build_pipeline(args.device, use_gan=use_gan, expression_checkpoint=args.expression_checkpoint)
+    is_stream = args.mode in {"camera", "video"}
+    use_gan = args.mode in {"image", "examples"}
+    pipeline = build_pipeline(
+        args.device,
+        use_gan=use_gan,
+        fast_mode=True if is_stream else False,
+        expression_checkpoint=args.expression_checkpoint,
+    )
     try:
         if args.mode == "image":
             return run_image(pipeline, Path(args.input), device=args.device)

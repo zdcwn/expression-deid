@@ -30,7 +30,6 @@ from expression_deid.ui.opencv_demo import _image_frame, _resize_rgb, build_pipe
 from expression_deid.config import EXAMPLE_VIDEO_DIR, KMU_ALIGNED_DIR, ROOT
 from expression_deid.runtime.pipeline import ExpressionDeidentifier
 from expression_deid.runtime.video import FastVideoRunner
-from expression_deid.runtime.expression import QualityExpressionPredictor
 from expression_deid.labels import EXPRESSION_ZH
 from expression_deid.ui.widgets import (
     AccuracyBars, ConfidenceMeter, FpsTrace, MediaCard, MetricCard,
@@ -344,7 +343,10 @@ class VideoWorker(QThread):
 
     def __init__(self, source, device: str, mode: str = "fast"):
         super().__init__(); self.source = source; self.device = device
-        self.mode = mode if mode in {"fast", "quality"} else "fast"
+        # The desktop runtime has one supported path.  Keep the constructor
+        # argument for compatibility with older checks and callers, but do
+        # not allow a second quality path to be selected at runtime.
+        self.mode = "fast"
         self.running = True
         self.frame_pending = threading.Event()
 
@@ -352,31 +354,41 @@ class VideoWorker(QThread):
 
     def run(self):
         capture = None
-        pipeline = display_pipeline = quality_predictor = None
+        pipeline = display_pipeline = None
         try:
-            # Both modes keep the privacy boundary: only the local anonymous
-            # result reaches the expression classifier.  Fast mode avoids loading
-            # the heavyweight GAN and quality checkpoint entirely.  Quality mode
-            # opts into those slower display/temporal branches explicitly.
-            pipeline = build_pipeline(self.device, use_gan=False)
+            # The live path always uses the validated fast configuration.  It
+            # keeps the anonymized-only expression boundary and avoids loading
+            # a second, slower predictor at runtime.
+            pipeline = build_pipeline(self.device, use_gan=False, fast_mode=True)
             if not self.running: return
-            if self.mode == "quality":
-                display_pipeline = build_pipeline(self.device, use_gan=True)
-                if not self.running: return
-                quality_manifest = ROOT / 'models' / 'expression' / 'expression_video_quality.json'
-                if quality_manifest.is_file() and (ROOT / 'models' / 'expression' / 'expression_video_quality.ts.pt').is_file():
-                    quality_predictor = QualityExpressionPredictor(self.device, manifest=quality_manifest)
-            else:
-                # The fast branch uses the same local pipeline for both output
-                # panes, avoiding a second model load and an unnecessary GAN.
-                display_pipeline = pipeline
+            # The human-facing preview uses the same fast landmark-conditioned
+            # anonymizer and is refreshed at a controlled cadence.
+            display_pipeline = build_pipeline(self.device, use_gan=True, fast_mode=True)
+            if not self.running: return
+            filter_kwargs = {
+                "time_constant": 0.35,
+                "min_confidence": 0.36,
+                "min_margin": 0.05,
+                "hold_confidence": 0.22,
+                "hold_margin": 0.01,
+                "switch_seconds": 0.28,
+                "initial_seconds": 0.08,
+                "uncertain_seconds": 2.0,
+                "min_observations": 2,
+                # Neutral webcam frames are often slightly lower-confidence
+                # after local anonymization.  Relax only neutral's entry gate;
+                # the other six classes keep the stricter switch threshold.
+                "class_min_confidence": {6: 0.32},
+                "class_min_margin": {6: 0.03},
+            }
             runner = FastVideoRunner(
                 pipeline,
-                detect_interval=1 if quality_predictor is not None else 5,
+                detect_interval=5,
                 display_pipeline=display_pipeline,
-                display_interval=15 if self.mode == "quality" else 1,
-                expression_predictor=quality_predictor,
-                track_reset_gap=2.5 if quality_predictor is not None else .75,
+                display_interval=12,
+                track_reset_gap=2.5,
+                max_detection_misses=3,
+                filter_kwargs=filter_kwargs,
             )
             kind, value = self.source; capture = cv2.VideoCapture(int(value), cv2.CAP_DSHOW) if kind == "camera" else cv2.VideoCapture(str(value))
             if not capture.isOpened(): raise RuntimeError("无法打开摄像头或视频文件")
@@ -436,8 +448,7 @@ class VideoPage(QWidget):
         bar.addWidget(label('运行模式', 'panelNote'))
         self.mode_combo = QComboBox()
         self.mode_combo.addItem('高速模式 · 实时优先', 'fast')
-        self.mode_combo.addItem('质量模式 · 准确优先', 'quality')
-        self.mode_combo.setToolTip('高速模式不加载 GAN 与质量模型；质量模式启用完整质量分支，启动更慢。')
+        self.mode_combo.setToolTip('当前桌面端使用统一的高速推理路径，保证实时响应和表情稳定性。')
         bar.addWidget(self.mode_combo)
         self.examples = QComboBox()
         titles = {'example_kmu_expressions.mp4':'六类表情切换','example_mixed.mp4':'混合场景','example_anger.mp4':'愤怒示例','example_surprise.mp4':'惊讶示例'}
@@ -480,11 +491,8 @@ class VideoPage(QWidget):
         self.source_label.setToolTip(text); self.fps_trace.reset(); self.confidence_meter.set_value(None)
         for card in (self.expression,self.confidence,self.fps,self.frame_card): card.set_value('—')
         self.original[1].clear_image('正在打开输入…'); self.anonymized[1].clear_image('正在加载分析模型…')
-        # Keep the worker constructor easy to replace in runtime checks while
-        # still applying the selected mode before the thread starts.
+        # Keep the worker constructor easy to replace in runtime checks.
         self.worker = VideoWorker(source, self.device)
-        if hasattr(self.worker, 'mode'):
-            self.worker.mode = self.mode_combo.currentData()
         self.worker.setParent(self)
         self.accept_frames = True
         self.worker.frame_ready.connect(self._frame); self.worker.worker_error.connect(self._error)
@@ -555,7 +563,7 @@ class PerformancePage(QWidget):
         except (OSError,ValueError): self.audit={}
         comparisons=self.audit.get('expression_comparison',[])
         self.current=comparisons[-1].get('domains',{}) if comparisons else {}
-        self.previous=comparisons[0].get('domains',{}) if comparisons else {}
+        self.previous=comparisons[0].get('domains',{}) if len(comparisons)>1 else {}
         self._build()
 
     def _build(self):
@@ -565,14 +573,18 @@ class PerformancePage(QWidget):
         layout.addLayout(page_heading('03 / MODEL INSIGHTS','用数据，理解表现。','每个数据集单独呈现；示例效果、预测置信度与验证准确率分别记录。'))
         controls=QHBoxLayout(); controls.addWidget(label('验证数据集','panelTitle')); controls.addStretch()
         self.scope=QComboBox()
-        for name,key in [('RAF · 自然场景七类','valid_raf'),('KMU · 座舱六类尾帧','valid_kmu'),('PPB · 中性验证集','valid_ppb'),('PPB · 中性测试集','test_ppb')]:
-            self.scope.addItem(name,key)
+        for name,key in [('KMU · 六类验证','valid_kmu'),('FER-2013 · 七类验证','valid_fer2013'),
+                         ('RAF · 七类跨数据集验证','valid_raf'),('KMU · 六类测试','test_kmu'),
+                         ('FER-2013 · 七类测试','test_fer2013'),('RAF · 七类测试','test_raf')]:
+            if key in self.current: self.scope.addItem(name,key)
+        selected=self.scope.findData(self.audit.get('best_validation_domain'))
+        if selected>=0: self.scope.setCurrentIndex(selected)
         controls.addWidget(self.scope); controls.addWidget(label(self.audit.get('date','未验证'),'statusChip')); layout.addLayout(controls)
         cards=QHBoxLayout(); cards.setSpacing(12)
         self.accuracy=MetricCard('匿名图验证准确率','—','所选数据集')
         self.sample_count=MetricCard('验证样本','—','不包含训练样本',accent=False)
         privacy=self.audit.get('privacy',{})
-        self.privacy=MetricCard('匿名化命中率',_metric_value(privacy.get('anonymization_identity_match_rate'),percent=True),'ratio_v2 强几何 · 仅匿名化 · 越低越好',accent=False)
+        self.privacy=MetricCard('匿名化命中率',_metric_value(privacy.get('anonymization_identity_match_rate'),percent=True),'局部残差模块 · Pins 独立评价',accent=False)
         self.privacy.value_label.setStyleSheet('color: #ad6157;')
         self.speed=MetricCard('稳态分析帧率','—','离线视频实测范围',accent=False)
         values=[row.get('steady_analysis_fps') for row in self.audit.get('videos',[]) if row.get('steady_analysis_fps') is not None]
@@ -587,11 +599,11 @@ class PerformancePage(QWidget):
         sl.addWidget(label('验证范围','panelTitle'))
         self.scope_note=label('','panelNote',wrap=True); sl.addWidget(self.scope_note)
         sl.addStretch(); sl.addWidget(label('匿名化效果检查','panelTitle'))
-        sl.addWidget(label('公开指标采用 ratio_v2 强几何匿名化路径；表情结果采用质量优先分类器。','panelNote',wrap=True))
+        sl.addWidget(label('表情分数来自当前自有模型；身份分数来自局部残差模块的独立面部对齐测试。','panelNote',wrap=True))
         sl.addWidget(label(f"{privacy.get('samples','—')} 个查询 · {privacy.get('gallery_size','—')} 人库",'panelNote',wrap=True))
         sl.addWidget(label('模型分析帧率包含匿名化与表情识别；生成刷新仍有耗时峰值。','panelNote',wrap=True))
         chart_row.addWidget(side,2); layout.addLayout(chart_row)
-        notice=label('当前结果为 2026-10-09 保存的验证记录；本人摄像头准确率与真实道路场景尚未验收。','notice',wrap=True); layout.addWidget(notice)
+        notice=label('当前结果为固定权重的离线数据集复测；六类座舱结果和七类自然场景结果分别呈现。','notice',wrap=True); layout.addWidget(notice)
         chain=QFrame(); chain.setProperty('panel',True); steps=QHBoxLayout(chain); steps.setContentsMargins(18,14,18,14)
         for i,text in enumerate(('01  输入灰度化','02  面部局部匿名化','03  匿名图表情分析')):
             steps.addWidget(label(text,'pipelineStep'),1)
@@ -606,20 +618,25 @@ class PerformancePage(QWidget):
         key=self.scope.currentData(); domain=self.current.get(key,{})
         self.accuracy.set_value(_metric_value(domain.get('accuracy'),percent=True))
         self.sample_count.set_value(f"{domain['samples']:,}" if 'samples' in domain else '—')
-        self.sample_count.note_label.setText({'valid_raf':'自然场景 · 七类表情','valid_kmu':'尾帧回归 · 非未见身份','valid_ppb':'7 人 · 仅中性','test_ppb':'另 7 人 · 仅中性'}.get(key,'尚未验证'))
+        self.sample_count.note_label.setText({'valid_fer2013':'主数据集 · PublicTest','test_fer2013':'主数据集 · PrivateTest',
+            'valid_raf':'跨数据集 · 七类表情','valid_kmu':'座舱六类 · 验证划分','test_raf':'自然场景 · 七类测试','test_kmu':'座舱六类 · 测试划分'}.get(key,'尚未验证'))
         previous=self.previous.get(key,{}).get('accuracy'); accuracy=domain.get('accuracy')
         if accuracy is not None and previous is not None:
             delta=(accuracy-previous)*100
             self.accuracy.note_label.setText(f'同输入较旧模型 {delta:+.2f} 个百分点')
-        else: self.accuracy.note_label.setText('该数据集尚未验证')
+        else: self.accuracy.note_label.setText('FER 主训练 · 固定权重复测' if accuracy is not None else '该数据集尚未验证')
         rows=[]
         for k,row in sorted(domain.get('by_class',{}).items(),key=lambda v:int(v[0])):
             index=int(k)
             if 0<=index<len(EXPRESSION_ZH): rows.append((EXPRESSION_ZH[index],row.get('samples',0),row.get('accuracy')))
         self.bars.set_rows(rows)
         notes={
-            'valid_raf':'RAF-DB\n3068 张自然场景验证图，覆盖七类表情。\n\n原图经过当前匿名链路后，再进入分类器。',
-            'valid_kmu':'KMU\n220 张序列尾帧，覆盖六类表情，不含中性。\n\n与训练数据存在同人相邻帧；不能代表陌生人泛化。',
+            'valid_fer2013':'FER-2013\n3,543 张七类 PublicTest 验证图。模型以 FER-2013 为主训练，使用原始 emotion 标签。',
+            'test_fer2013':'FER-2013\n3,589 张七类 PrivateTest 图像全部计分；没有按预测正确与否筛选。',
+            'test_kmu':'KMU-FED\n180 张近红外六类图像，来自未参与本轮适配训练的两名人员，不含中性。\n\n初始化权重已有 KMU 训练历史；该结果用于六类座舱回归，不代表严格未见人员泛化或七类总体准确率。',
+            'test_raf':'RAF-DB\n1469 张七类留出图像。匿名化后再分类，和 KMU 六类结果分别统计。',
+            'valid_raf':'RAF-DB\n1595 张自然场景验证图，覆盖七类表情。\n\n原图经过当前匿名链路后，再进入分类器。',
+            'valid_kmu':'KMU-FED\n230 张六类验证图，不含中性。\n\n当前模型以 FER-2013 为主训练、KMU 为辅助，在各集合上使用同一份权重。\n\n初始化含历史训练，因此按本轮划分记录回归结果，六类分数不表述为七类总体准确率。',
             'valid_ppb':'PPB-Emo\n34 张近红外中性帧，来自 7 人。\n\n只验证中性，不能解释为七类准确率。',
             'test_ppb':'PPB-Emo\n35 张近红外中性帧，来自另外 7 人。\n\n与训练、验证人员分开；只包含中性。',
         }

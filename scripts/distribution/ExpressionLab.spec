@@ -9,7 +9,7 @@ stage = Path(os.environ['EXPRESSION_RELEASE_STAGE'])
 datas = [(str(stage), '.')]
 datas += collect_data_files('mediapipe')
 datas += collect_data_files('av')
-for package in ['torch', 'mediapipe', 'PySide6', 'opencv-contrib-python', 'onnxruntime', 'av', 'numpy', 'pillow', 'scipy', 'matplotlib']:
+for package in ['torch', 'torchvision', 'mediapipe', 'PySide6', 'opencv-contrib-python', 'onnxruntime', 'av', 'numpy', 'pillow', 'scipy', 'matplotlib']:
     datas += copy_metadata(package)
 binaries = collect_dynamic_libs('mediapipe')
 binaries += collect_dynamic_libs('onnxruntime')
@@ -24,7 +24,7 @@ a = Analysis(
     hooksconfig={'matplotlib': {'backends': ['Agg']}},
     excludes=['PyQt5', 'PyQt6', 'PySide2', 'tkinter', 'IPython', 'notebook',
               'jupyter', 'tensorflow', 'jax', 'jaxlib', 'transformers',
-              'torchvision', 'torchaudio', 'pytorch_lightning', 'pandas', 'pytest'],
+              'torchaudio', 'pytorch_lightning', 'pandas', 'pytest'],
     noarchive=False,
 )
 pyz = PYZ(a.pure)

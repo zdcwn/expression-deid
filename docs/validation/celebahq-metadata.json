@@ -1,0 +1,23 @@
+{
+  "dataset": "celebahq",
+  "classes": {},
+  "raw_images": 30000,
+  "rejected": 736,
+  "split_scope": "image duplicate groups; identity labels not supplied",
+  "seed": 42,
+  "conflicting_duplicates_removed": 0,
+  "samples": 29264,
+  "splits": {
+    "train": 23412,
+    "valid": 2926,
+    "test": 2926
+  },
+  "shape": [
+    100,
+    100
+  ],
+  "channels": 1,
+  "class_counts": {
+    "-1": 29264
+  }
+}

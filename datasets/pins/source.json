@@ -1,0 +1,8 @@
+{
+  "dataset": "pins",
+  "source": "https://www.kaggle.com/datasets/hereisburak/pins-face-recognition",
+  "archive_bytes": 389784397,
+  "archive_sha256": "5c108131b16867c744ffb1ffff04cb9c8ee231d8b37018a9c787d2b059e3e35b",
+  "images": 17534,
+  "crc": "pass"
+}

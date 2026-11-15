@@ -2,7 +2,7 @@
 
 发行包支持 Windows 10/11 x64，携带 Python、Qt、推理库、当前运行权重、1,100 张 KMU 对齐示例图、4 段示例视频、指标记录及第三方许可。CPU 可用；启动时实际运行 CUDA 卷积探测，通过后才启用 NVIDIA GPU。没有兼容驱动或显卡时自动使用 CPU，不要求用户安装 CUDA 工具包。
 
-单文件版双击启动，首次自动展开内置资源到当前用户的本地应用数据目录，后续直接启动缓存中的应用。ZIP 版完整解压后运行主程序。两者都不需要安装 Python、执行命令或下载模型。建议 8 GB 及以上内存，为运行库与展开空间保留至少 8 GB 磁盘空间；CPU 的质量模式速度取决于硬件。
+单文件版双击启动，首次自动展开内置资源到当前用户的本地应用数据目录，后续直接启动缓存中的应用。ZIP 版完整解压后运行主程序。两者都不需要安装 Python、执行命令或下载模型。建议 8 GB 及以上内存，为运行库与展开空间保留至少 8 GB 磁盘空间；CPU 视频分析速度取决于硬件。
 
 发行时可提供 CPU 轻量版与 GPU 版。CPU 轻量版保留相同模型、全部示例和三个页面，不携带 CUDA 库，因此即使电脑有 NVIDIA 显卡也使用 CPU；GPU 版保留自动选择 NVIDIA 加速和 CPU 回退。构建器会从匿名化训练检查点无损导出生成器，剔除优化器和判别器状态，逐张量核对数值与类型，原始训练检查点不变。
 
@@ -34,13 +34,19 @@ CPU 轻量版在独立环境中安装 `requirements/distribution-cpu.txt` 后，
 GitHub Releases 的单个附件不能达到 2 GiB。GPU 单文件超过该限制时，使用下面的脚本生成每卷 900 MiB 的附件与自动启动器；原始 EXE 不变。CPU 版直接上传原文件。
 
 ```powershell
-.\.venv-anon\Scripts\python.exe scripts/distribution/build_release_parts.py --source outputs/releases/ExpressionLab-1.0.1/GPU/ExpressionLab-GPU.exe --output outputs/releases/ExpressionLab-1.0.1/github_assets
+.\.venv-anon\Scripts\python.exe scripts/distribution/build_release_parts.py --source outputs/releases/ExpressionLab-1.1.0/GPU/ExpressionLab-GPU.exe --output outputs/releases/ExpressionLab-1.1.0/github_assets
 ```
 
-接收者下载 `ExpressionLab-GPU-Start.exe` 和三个 `ExpressionLab-GPU.exe.part1` 至 `.part3`，放在同一文件夹后双击启动器。启动器用 Windows 自带组件合并到当前用户缓存，并核对完整文件的 SHA-256；无需额外解压软件、管理员权限或运行命令。`parts-check.json` 记录原文件与分卷哈希，发布时同时提供 `SHA256SUMS.txt`。上传后核对附件的大小和 GitHub 返回的摘要，再发布 Release。
+接收者下载 `ExpressionLab-GPU-Start.exe` 和全部 `ExpressionLab-GPU.exe.part*`，放在同一文件夹后双击启动器。启动器用 Windows 自带组件合并到当前用户缓存，并核对完整文件的 SHA-256；无需额外解压软件、管理员权限或运行命令。`parts-check.json` 记录原文件与分卷哈希，发布时同时提供 `SHA256SUMS.txt`。上传后核对附件的大小和 GitHub 返回的摘要，再发布 Release。
 
-自检会阻止网络连接，核对资源哈希、解码全部图库与示例视频、检查小屏幕和三个页面，并验证全部图库条目、分类筛选和末尾图片的缩略图。图片推理采用每类抽样及末尾样本，同时运行高速/质量视频分析，保存截图并检查正常退出。源码桌面检查另行对完整图库逐张分析。发布前还需在移除开发环境路径的进程中运行，验证中文路径以及单文件首次展开和缓存复用。检查的是冻结后的程序，不能用源码检查代替。
+自检会阻止网络连接，核对资源哈希、解码全部图库与示例视频、检查小屏幕和三个页面，并验证全部图库条目、分类筛选和末尾图片的缩略图。图片推理采用每类抽样及末尾样本，运行当前唯一表情推理路径的视频分析，保存截图并检查正常退出。源码桌面检查另行对完整图库逐张分析。发布前还需在移除开发环境路径的进程中运行，验证中文路径以及单文件首次展开和缓存复用。检查的是冻结后的程序，不能用源码检查代替。
 
 日志写入当前用户的 `AppData/Local/ExpressionLab/logs`；运行资源只读。关键点模型直接读取字节，避免中文路径和共享临时目录权限问题。字体使用随包携带的 Noto Sans SC 回退，界面保留 Qt 的 DPI 缩放，小屏幕可滚动到所有控件。
 
 此包面向 Windows x64；macOS、Linux 和 Windows ARM 需在对应系统上另行构建与验证。当前机器的验证记录不能代表其他物理电脑、摄像头或驱动都已验收。
+
+## v1.1.0 模型与资源
+
+本版使用 `configs/runtime_models.json` 指定的 FER-2013 主训练表情权重，KMU 为辅助。固定模型跨数据集评价中，最高验证结果为 KMU 六类 91.74%（230 张、不含中性）；完整 FER、KMU、RAF 验证及测试结果见项目 README。CPU/GPU 构建读取相同模型清单与指标，不使用旧质量权重。
+
+CPU 构建需要 `torch==2.11.0+cpu` 与 `torchvision==0.26.0+cpu` 配套；GPU 构建使用相应 CUDA 版本。不要将 GPU torchvision 混入 CPU 环境。实际发行附件及摘要见 v1.1.0 Release。

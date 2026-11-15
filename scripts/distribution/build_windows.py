@@ -15,6 +15,27 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[2]
 
 
+def release_resources() -> list[str]:
+    """Bundle the same selected models as the source desktop application."""
+    selected = json.loads((ROOT/'configs/runtime_models.json').read_text(encoding='utf-8'))
+    resources = [
+        'models/detection/face_detection_yunet_2023mar.onnx',
+        'models/detection/face_landmarker.task',
+        selected['anonymizer']['file'], selected['identity']['file'],
+        selected['expression']['current'],
+        'models/anonymization/ganonymization_50.ckpt',
+        'configs/runtime_models.json',
+        'expression_deid/preprocessing/norm_stats.json',
+        'docs/model-metrics.json',
+        'third_party/ganonymization/lib/models/pix2pix.py',
+        'third_party/ganonymization/LICENSE',
+    ]
+    for folder in ['datasets/kmu-fed-aligned', 'examples/videos', 'third_party/licenses', 'expression_deid/ui/assets']:
+        resources.extend(p.relative_to(ROOT).as_posix() for p in (ROOT/folder).rglob('*')
+                         if p.is_file() and '__pycache__' not in p.parts)
+    return sorted(set(resources))
+
+
 def export_generator(source: Path, target: Path) -> dict:
     """Drop optimizer/discriminator state; preserve every inference tensor bit."""
     import torch
@@ -44,22 +65,7 @@ def main():
     output = args.output.resolve()
     stage = output / 'staging'
     stage.mkdir(parents=True, exist_ok=True)
-    resources = [
-        'models/detection/face_detection_yunet_2023mar.onnx',
-        'models/detection/face_landmarker.task',
-        'models/anonymization/anonymizer_adversarial_v1.pt',
-        'models/anonymization/ganonymization_50.ckpt',
-        'models/expression/expression_realtime_stable.pt',
-        'models/expression/expression_machine_selector_texture.pt',
-        'models/expression/expression_video_quality.ts.pt',
-        'models/expression/expression_video_quality.json',
-        'expression_deid/preprocessing/norm_stats.json',
-        'docs/model-metrics.json',
-        'third_party/ganonymization/lib/models/pix2pix.py',
-        'third_party/ganonymization/LICENSE',
-    ]
-    for folder in ['datasets/kmu-fed-aligned', 'examples/videos', 'third_party/licenses', 'expression_deid/ui/assets']:
-        resources.extend(p.relative_to(ROOT).as_posix() for p in (ROOT / folder).rglob('*') if p.is_file() and '__pycache__' not in p.parts)
+    resources = release_resources()
     files = []
     for relative in sorted(set(resources)):
         source = ROOT / relative

@@ -26,6 +26,7 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--device',choices=('cuda','cpu'),default='cuda')
     parser.add_argument('--output',default='outputs/checks/desktop_presentation')
+    parser.add_argument('--max-images',type=int,default=0,help='Bound this integration run; zero processes the complete gallery')
     args=parser.parse_args(); out=ROOT/args.output; out.mkdir(parents=True,exist_ok=True)
     torch.set_num_threads(1)
     app=QApplication.instance() or QApplication([]); app.setQuitOnLastWindowClosed(False)
@@ -59,12 +60,19 @@ def main():
     results['checks'].append('dataset selector matches saved sample counts and class rows')
 
     window.select_page(0); page=window.pages[0]
-    errors=[]; page.run_all(); worker=page.worker
+    selected=page.items
+    if args.max_images:
+        # Include all available classes before filling a bounded run.
+        selected=[]
+        for label in sorted({item['label'] for item in page.items}):
+            selected.append(next(item for item in page.items if item['label']==label))
+        selected += [item for item in page.items if item not in selected][:max(0,args.max_images-len(selected))]
+    errors=[]; page._start(selected); worker=page.worker
     assert worker is not None
     loop=QEventLoop(); worker.error.connect(errors.append); worker.finished.connect(loop.quit)
     cutoff=QTimer(); cutoff.setSingleShot(True); cutoff.timeout.connect(worker.requestInterruption); cutoff.start(600000)
     loop.exec(); cutoff.stop(); assert worker.wait(10000) and not errors, (errors, len(page.results), len(page.items))
-    assert len(page.results)==len(page.items)>0 and page.run_button.isEnabled()
+    assert len(page.results)==len(selected)>0 and page.run_button.isEnabled()
     results['image_samples']=len(page.results)
     results['gallery_rows']=page.sample_list.count()
     for payload,_,_,_ in page.results.values():
@@ -81,16 +89,18 @@ def main():
     results['checks'].append('all real example results, cached selection, anonymous-only provenance')
 
     window.select_page(1); video=window.pages[1]
-    assert [video.mode_combo.itemData(i) for i in range(video.mode_combo.count())] == ['fast', 'quality']
-    assert video.mode_combo.currentData() == 'fast'
+    assert [video.mode_combo.itemData(i) for i in range(video.mode_combo.count())] == ['fast']
     index=video.examples.findData('example_kmu_expressions.mp4'); assert index>=0
     video.examples.setCurrentIndex(index); video.play_example(); worker=video.worker
     assert worker.mode == 'fast'
     errors=[]; count=[0]; loop=QEventLoop(); worker.worker_error.connect(errors.append)
+    best_snapshot=[-1.0]
     def receive(*payload):
         count[0]+=1
-        if count[0]==70: snapshot('video_actual')
-        if count[0]>=80: video.stop()
+        confidence=payload[3]
+        if count[0]>10 and confidence is not None and confidence>best_snapshot[0]:
+            best_snapshot[0]=confidence; snapshot('video_actual')
+        if count[0]>=240: video.stop()
     worker.frame_ready.connect(receive); worker.finished.connect(loop.quit)
     cutoff=QTimer(); cutoff.setSingleShot(True); cutoff.timeout.connect(video.stop); cutoff.start(90000)
     loop.exec(); cutoff.stop(); app.processEvents()

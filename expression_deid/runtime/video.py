@@ -52,6 +52,8 @@ class FastVideoRunner:
         display_interval: int = 1,
         expression_predictor=None,
         track_reset_gap: float = .75,
+        filter_kwargs: dict | None = None,
+        max_detection_misses: int = 0,
     ):
         self.pipeline = pipeline
         # The optional display pipeline updates the desktop preview while the
@@ -60,10 +62,16 @@ class FastVideoRunner:
         self.display_pipeline = display_pipeline or pipeline
         self.display_interval = max(1, int(display_interval))
         self.detect_interval = max(1, int(detect_interval))
+        self.max_detection_misses = max(0, int(max_detection_misses))
         self.expression_predictor = expression_predictor
         if expression_predictor is not None and hasattr(expression_predictor, 'validate_pipeline'):
             expression_predictor.validate_pipeline(pipeline)
-        self.expression_filter = TemporalExpressionFilter(reset_gap=track_reset_gap)
+        filter_options = dict(filter_kwargs or {})
+        # The track gap belongs to the runner because camera and file sources
+        # use different clocks.  Callers may tune confidence and dwell times
+        # without changing the causal filter's defaults for offline checks.
+        filter_options.setdefault("reset_gap", track_reset_gap)
+        self.expression_filter = TemporalExpressionFilter(**filter_options)
         self.last_frame_index = None
         self.last_timestamp = None
         self.track_id = 0
@@ -72,6 +80,7 @@ class FastVideoRunner:
         self.landmarks = None
         self.matrix = None
         self.frames_since_detection = self.detect_interval
+        self.detection_misses = 0
         self.runtime_donor = None
         self.display_aligned = None
         self.display_timestamp = None
@@ -89,6 +98,7 @@ class FastVideoRunner:
         self.landmarks = None
         self.matrix = None
         self.frames_since_detection = self.detect_interval
+        self.detection_misses = 0
         self.runtime_donor = None
         self.display_aligned = None
         self.display_timestamp = None
@@ -103,8 +113,17 @@ class FastVideoRunner:
         faces = self.pipeline.detector.detect(rgb)
         face, reason = select_face(faces, rgb.shape[:2])
         if face is None:
+            self.detection_misses += 1
+            # A detector miss can be a single blurred or low-contrast frame.
+            # Keep the last aligned track for a bounded interval so one miss
+            # does not erase a valid expression history.  No classifier call
+            # uses the source frame during this hold.
+            if (self.face is not None and self.landmarks is not None
+                    and self.detection_misses <= self.max_detection_misses):
+                return reason
             self.reset()
             return reason
+        self.detection_misses = 0
         if self.face is not None and not self._same_track(self.face, face):
             self.reset()
         landmarks = landmarks_of(face)
@@ -268,8 +287,8 @@ def _stream_pipelines(device, expression_checkpoint=None, gan_checkpoint=None, g
     try:
         if gan_checkpoint:
             display = ExpressionDeidentifier(
-                ROOT/'models/anonymization/anonymizer_adversarial_v1.pt',
-                ROOT/'models/expression/expression_machine_selector_texture.pt', device=str(pipeline.device),
+                ROOT/'models/anonymization/anonymizer_celebahq.pt',
+                Path(expression_checkpoint) if expression_checkpoint else ROOT/'models/expression/expression_current.pt', device=str(pipeline.device),
                 fast_mode=True, ganonymization_checkpoint=gan_checkpoint,
                 ganonymization_repo=gan_repo or ROOT/'third_party/ganonymization')
         else:
@@ -308,7 +327,25 @@ def run_video(
     try:
         pipeline.predict_expression(np.zeros((100, 100), dtype=np.uint8), aligned=True)
         warmup_seconds = time.perf_counter() - warmup_started
-        runner = FastVideoRunner(pipeline, detect_interval=detect_interval, display_pipeline=display, display_interval=15)
+        runner = FastVideoRunner(
+            pipeline,
+            detect_interval=detect_interval,
+            display_pipeline=display,
+            display_interval=12,
+            track_reset_gap=2.5,
+            max_detection_misses=3,
+            filter_kwargs={
+                "time_constant": 0.35,
+                "min_confidence": 0.36,
+                "min_margin": 0.05,
+                "hold_confidence": 0.22,
+                "hold_margin": 0.01,
+                "switch_seconds": 0.28,
+                "initial_seconds": 0.08,
+                "uncertain_seconds": 2.0,
+                "min_observations": 2,
+            },
+        )
         telemetry_path.parent.mkdir(parents=True, exist_ok=True)
     except Exception:
         pipeline.close()
@@ -399,7 +436,25 @@ def run_camera(
     device = str(pipeline.device)
     try:
         pipeline.predict_expression(np.zeros((100, 100), dtype=np.uint8), aligned=True)
-        runner = FastVideoRunner(pipeline, detect_interval=detect_interval, display_pipeline=display, display_interval=15)
+        runner = FastVideoRunner(
+            pipeline,
+            detect_interval=detect_interval,
+            display_pipeline=display,
+            display_interval=12,
+            track_reset_gap=2.5,
+            max_detection_misses=3,
+            filter_kwargs={
+                "time_constant": 0.35,
+                "min_confidence": 0.36,
+                "min_margin": 0.05,
+                "hold_confidence": 0.22,
+                "hold_margin": 0.01,
+                "switch_seconds": 0.28,
+                "initial_seconds": 0.08,
+                "uncertain_seconds": 2.0,
+                "min_observations": 2,
+            },
+        )
     except Exception:
         pipeline.close()
         if display is not pipeline: display.close()

@@ -1,0 +1,29 @@
+{
+  "schema": 1,
+  "expression_mode": "fer2013_primary_runtime",
+  "anonymizer": {
+    "file": "models/anonymization/anonymizer_celebahq.pt",
+    "sha256": "8ae852a051439fd77c542dca77abf329bce4c2cc9746d2d6b5a2cd0af689dec9",
+    "primary": "celebahq"
+  },
+  "identity": {
+    "file": "models/identity/identity_pins.pt",
+    "sha256": "8dd0f68a4ca52674ab0dbb5bd56447b9b67dc2513b2c0d4c8629c06c9d1c8e1b",
+    "primary": "pins"
+  },
+  "expression": {
+    "current": "models/expression/expression_current.pt"
+  },
+  "expression_input_source": "anonymized_only",
+  "expression_training": {
+    "primary": "fer2013",
+    "auxiliary": [
+      "kmu"
+    ],
+    "primary_sampling_fraction": 0.85,
+    "recipe": "runtime_domain_fer2013_expression"
+  },
+  "expression_sha256": "f747deacc851b6b8d48beee05e58b095f75196d487263f5c9cd61eb6d61727fb",
+  "implementation_base_commit": "7e9a839fcef1909a09b362e45e07d2fed0700b65",
+  "expression_validation": "docs/validation/expression-validation.json"
+}

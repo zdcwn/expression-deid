@@ -47,7 +47,6 @@ def main():
     p.add_argument('--frames', type=int, default=240)
     p.add_argument('--expected', choices=EXPRESSION_NAMES, help='Only for clips with this known label throughout')
     p.add_argument('--human-display', action='store_true', help='Benchmark the desktop visual GAN at interval 15')
-    p.add_argument('--quality-manifest', type=Path, help='验证准确模式；缺省验证原快速模型')
     p.add_argument('--output', default='outputs/video_stability_check')
     args = p.parse_args()
     import torch
@@ -58,20 +57,13 @@ def main():
     summaries = []
     try:
         display = build_pipeline(args.device, use_gan=True) if args.human_display else None
-        predictor = None
-        if args.quality_manifest:
-            from expression_deid.runtime.expression import QualityExpressionPredictor
-            predictor = QualityExpressionPredictor(args.device, manifest=args.quality_manifest)
         for path in map(Path, args.videos):
             capture = cv2.VideoCapture(str(path))
             if not capture.isOpened():
                 raise RuntimeError(f'Cannot open {path}')
             fps = capture.get(cv2.CAP_PROP_FPS)
             fps = fps if np.isfinite(fps) and fps > 0 else 30
-            runner = FastVideoRunner(pipeline, display_pipeline=display, display_interval=1 if predictor is not None else 15,
-                                     detect_interval=1 if predictor is not None else 5,
-                                     expression_predictor=predictor,
-                                     track_reset_gap=2.5 if predictor is not None else .75)
+            runner = FastVideoRunner(pipeline, display_pipeline=display, display_interval=15, detect_interval=5)
             rows = []
             try:
                 for index in range(args.frames):

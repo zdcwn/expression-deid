@@ -1,0 +1,8 @@
+{
+  "dataset": "celebahq",
+  "source": "https://www.kaggle.com/datasets/badasstechie/celebahq-resized-256x256",
+  "archive_bytes": 296807591,
+  "archive_sha256": "5fee4f8bb4594ae67d250dacf1148f5ac5e023c4dfa8d18e07722389a47f00fb",
+  "images": 30000,
+  "crc": "pass"
+}

@@ -1,484 +1,231 @@
 {
   "schema": 1,
-  "date": "2026-10-09",
-  "model": "models/expression/expression_video_quality.ts.pt",
+  "date": "2026-11-15",
+  "model": "models/expression/expression_current.pt",
   "expression_comparison": [
     {
-      "checkpoint": "models/expression/expression_realtime_stable.pt",
-      "domains": {
-        "valid_raf": {
-          "samples": 3068,
-          "accuracy": 0.6049543619155884,
-          "nll": 1.1188089847564697,
-          "ece_10_bins": 0.013018814555834979,
-          "mean_confidence": 0.6025645136833191,
-          "confusion": [
-            [
-              189,
-              50,
-              8,
-              15,
-              17,
-              19,
-              31
-            ],
-            [
-              4,
-              43,
-              3,
-              2,
-              8,
-              11,
-              3
-            ],
-            [
-              13,
-              11,
-              30,
-              14,
-              35,
-              23,
-              34
-            ],
-            [
-              35,
-              67,
-              46,
-              837,
-              68,
-              57,
-              75
-            ],
-            [
-              20,
-              60,
-              35,
-              22,
-              251,
-              29,
-              61
-            ],
-            [
-              11,
-              22,
-              9,
-              7,
-              11,
-              92,
-              10
-            ],
-            [
-              65,
-              21,
-              49,
-              18,
-              83,
-              30,
-              414
-            ]
-          ],
-          "by_class": {
-            "0": {
-              "samples": 329,
-              "accuracy": 0.574468085106383
-            },
-            "1": {
-              "samples": 74,
-              "accuracy": 0.581081081081081
-            },
-            "2": {
-              "samples": 160,
-              "accuracy": 0.1875
-            },
-            "3": {
-              "samples": 1185,
-              "accuracy": 0.7063291139240506
-            },
-            "4": {
-              "samples": 478,
-              "accuracy": 0.5251046025104602
-            },
-            "5": {
-              "samples": 162,
-              "accuracy": 0.5679012345679012
-            },
-            "6": {
-              "samples": 680,
-              "accuracy": 0.6088235294117647
-            }
-          }
-        },
-        "valid_kmu": {
-          "samples": 220,
-          "accuracy": 0.9909090995788574,
-          "nll": 0.09952098876237869,
-          "ece_10_bins": 0.07544598588719964,
-          "mean_confidence": 0.9180389642715454,
-          "confusion": [
-            [
-              40,
-              0,
-              0,
-              0,
-              0,
-              0,
-              0
-            ],
-            [
-              0,
-              40,
-              0,
-              0,
-              0,
-              0,
-              0
-            ],
-            [
-              0,
-              0,
-              23,
-              0,
-              0,
-              1,
-              0
-            ],
-            [
-              0,
-              0,
-              0,
-              42,
-              0,
-              0,
-              0
-            ],
-            [
-              0,
-              1,
-              0,
-              0,
-              35,
-              0,
-              0
-            ],
-            [
-              0,
-              0,
-              0,
-              0,
-              0,
-              38,
-              0
-            ],
-            [
-              0,
-              0,
-              0,
-              0,
-              0,
-              0,
-              0
-            ]
-          ],
-          "by_class": {
-            "0": {
-              "samples": 40,
-              "accuracy": 1.0
-            },
-            "1": {
-              "samples": 40,
-              "accuracy": 1.0
-            },
-            "2": {
-              "samples": 24,
-              "accuracy": 0.9583333333333334
-            },
-            "3": {
-              "samples": 42,
-              "accuracy": 1.0
-            },
-            "4": {
-              "samples": 36,
-              "accuracy": 0.9722222222222222
-            },
-            "5": {
-              "samples": 38,
-              "accuracy": 1.0
-            }
-          }
-        },
-        "valid_ppb": {
-          "samples": 34,
-          "accuracy": 0.9117646813392639,
-          "nll": 0.28637054562568665,
-          "ece_10_bins": 0.1181738042505458,
-          "mean_confidence": 0.821818470954895,
-          "confusion": [
-            [
-              0,
-              0,
-              0,
-              0,
-              0,
-              0,
-              0
-            ],
-            [
-              0,
-              0,
-              0,
-              0,
-              0,
-              0,
-              0
-            ],
-            [
-              0,
-              0,
-              0,
-              0,
-              0,
-              0,
-              0
-            ],
-            [
-              0,
-              0,
-              0,
-              0,
-              0,
-              0,
-              0
-            ],
-            [
-              0,
-              0,
-              0,
-              0,
-              0,
-              0,
-              0
-            ],
-            [
-              0,
-              0,
-              0,
-              0,
-              0,
-              0,
-              0
-            ],
-            [
-              0,
-              0,
-              0,
-              2,
-              1,
-              0,
-              31
-            ]
-          ],
-          "by_class": {
-            "6": {
-              "samples": 34,
-              "accuracy": 0.9117647058823529
-            }
-          }
-        },
-        "test_ppb": {
-          "samples": 35,
-          "accuracy": 1.0,
-          "nll": 0.14630331099033356,
-          "ece_10_bins": 0.12750657740980387,
-          "mean_confidence": 0.8724934458732605,
-          "confusion": [
-            [
-              0,
-              0,
-              0,
-              0,
-              0,
-              0,
-              0
-            ],
-            [
-              0,
-              0,
-              0,
-              0,
-              0,
-              0,
-              0
-            ],
-            [
-              0,
-              0,
-              0,
-              0,
-              0,
-              0,
-              0
-            ],
-            [
-              0,
-              0,
-              0,
-              0,
-              0,
-              0,
-              0
-            ],
-            [
-              0,
-              0,
-              0,
-              0,
-              0,
-              0,
-              0
-            ],
-            [
-              0,
-              0,
-              0,
-              0,
-              0,
-              0,
-              0
-            ],
-            [
-              0,
-              0,
-              0,
-              0,
-              0,
-              0,
-              35
-            ]
-          ],
-          "by_class": {
-            "6": {
-              "samples": 35,
-              "accuracy": 1.0
-            }
-          }
-        }
+      "checkpoint": "models/expression/expression_current.pt",
+      "datasets": {
+        "primary": "fer2013",
+        "auxiliary": [
+          "kmu"
+        ],
+        "primary_sampling_fraction": 0.85,
+        "recipe": "runtime_domain_fer2013_expression"
       },
-      "scope": "历史快速模型，仅用于桌面页对照"
-    },
-    {
-      "checkpoint": "models/expression/expression_video_quality.ts.pt",
       "domains": {
-        "valid_raf": {
-          "samples": 3068,
-          "accuracy": 0.7838983050847458,
-          "neutral_recall": 0.8191176470588235,
-          "neutral_as_sad_angry": 58,
+        "valid_fer2013": {
+          "samples": 3543,
+          "accuracy": 0.5740897544453852,
+          "balanced_accuracy": 0.5295471917144824,
+          "macro_f1": 0.530024296700492,
           "confusion": [
             [
-              255,
-              7,
-              3,
+              281,
+              38,
+              1,
+              24,
               15,
+              16,
+              17
+            ],
+            [
+              49,
+              165,
+              5,
+              26,
+              109,
+              58,
+              82
+            ],
+            [
+              0,
               8,
-              7,
-              34
-            ],
-            [
-              10,
-              39,
-              1,
-              6,
-              11,
-              3,
-              4
-            ],
-            [
-              12,
-              1,
-              46,
-              21,
               20,
-              17,
-              43
+              4,
+              9,
+              8,
+              6
             ],
             [
-              19,
+              24,
+              32,
               4,
-              8,
-              1065,
-              18,
-              8,
-              63
+              706,
+              25,
+              26,
+              73
             ],
             [
               16,
-              4,
-              13,
-              22,
-              336,
+              78,
               6,
+              57,
+              293,
+              63,
+              137
+            ],
+            [
+              18,
+              41,
+              12,
+              36,
+              72,
+              201,
               81
             ],
             [
               11,
-              3,
-              6,
-              9,
-              13,
-              107,
-              13
-            ],
-            [
-              36,
-              0,
-              10,
-              19,
-              55,
-              3,
-              557
+              43,
+              2,
+              62,
+              76,
+              39,
+              368
             ]
           ],
           "by_class": {
             "0": {
-              "samples": 329,
-              "accuracy": 0.7750759878419453
+              "samples": 392,
+              "accuracy": 0.7168367346938775
             },
             "1": {
-              "samples": 74,
-              "accuracy": 0.527027027027027
+              "samples": 494,
+              "accuracy": 0.3340080971659919
             },
             "2": {
-              "samples": 160,
-              "accuracy": 0.2875
+              "samples": 55,
+              "accuracy": 0.36363636363636365
             },
             "3": {
-              "samples": 1185,
-              "accuracy": 0.8987341772151899
+              "samples": 890,
+              "accuracy": 0.7932584269662921
             },
             "4": {
-              "samples": 478,
-              "accuracy": 0.702928870292887
+              "samples": 650,
+              "accuracy": 0.45076923076923076
             },
             "5": {
-              "samples": 162,
-              "accuracy": 0.6604938271604939
+              "samples": 461,
+              "accuracy": 0.4360086767895879
             },
             "6": {
-              "samples": 680,
-              "accuracy": 0.8191176470588235
+              "samples": 601,
+              "accuracy": 0.6123128119800333
+            }
+          }
+        },
+        "test_fer2013": {
+          "samples": 3589,
+          "accuracy": 0.5639453886876568,
+          "balanced_accuracy": 0.5129907280680044,
+          "macro_f1": 0.5069147179630195,
+          "confusion": [
+            [
+              287,
+              51,
+              1,
+              22,
+              15,
+              19,
+              21
+            ],
+            [
+              65,
+              151,
+              12,
+              33,
+              118,
+              66,
+              83
+            ],
+            [
+              1,
+              5,
+              18,
+              8,
+              6,
+              14,
+              3
+            ],
+            [
+              20,
+              21,
+              8,
+              719,
+              41,
+              27,
+              43
+            ],
+            [
+              10,
+              61,
+              10,
+              51,
+              253,
+              60,
+              149
+            ],
+            [
+              16,
+              59,
+              13,
+              37,
+              80,
+              209,
+              77
+            ],
+            [
+              12,
+              31,
+              5,
+              56,
+              95,
+              40,
+              387
+            ]
+          ],
+          "by_class": {
+            "0": {
+              "samples": 416,
+              "accuracy": 0.6899038461538461
+            },
+            "1": {
+              "samples": 528,
+              "accuracy": 0.2859848484848485
+            },
+            "2": {
+              "samples": 55,
+              "accuracy": 0.32727272727272727
+            },
+            "3": {
+              "samples": 879,
+              "accuracy": 0.8179749715585893
+            },
+            "4": {
+              "samples": 594,
+              "accuracy": 0.42592592592592593
+            },
+            "5": {
+              "samples": 491,
+              "accuracy": 0.4256619144602851
+            },
+            "6": {
+              "samples": 626,
+              "accuracy": 0.6182108626198083
             }
           }
         },
         "valid_kmu": {
-          "samples": 220,
-          "accuracy": 0.9954545454545455,
-          "neutral_recall": null,
-          "neutral_as_sad_angry": 0,
+          "samples": 230,
+          "accuracy": 0.9173913043478261,
+          "balanced_accuracy": 0.9208333333333334,
+          "macro_f1": 0.9169270206224064,
           "confusion": [
             [
-              40,
+              39,
               0,
-              0,
+              1,
               0,
               0,
               0,
@@ -486,7 +233,7 @@
             ],
             [
               0,
-              40,
+              30,
               0,
               0,
               0,
@@ -499,6 +246,15 @@
               24,
               0,
               0,
+              16,
+              0
+            ],
+            [
+              0,
+              1,
+              0,
+              39,
+              0,
               0,
               0
             ],
@@ -506,17 +262,8 @@
               0,
               1,
               0,
-              41,
               0,
-              0,
-              0
-            ],
-            [
-              0,
-              0,
-              0,
-              0,
-              36,
+              39,
               0,
               0
             ],
@@ -526,8 +273,105 @@
               0,
               0,
               0,
-              38,
+              40,
               0
+            ],
+            [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          ],
+          "by_class": {
+            "0": {
+              "samples": 40,
+              "accuracy": 0.975
+            },
+            "1": {
+              "samples": 30,
+              "accuracy": 1.0
+            },
+            "2": {
+              "samples": 40,
+              "accuracy": 0.6
+            },
+            "3": {
+              "samples": 40,
+              "accuracy": 0.975
+            },
+            "4": {
+              "samples": 40,
+              "accuracy": 0.975
+            },
+            "5": {
+              "samples": 40,
+              "accuracy": 1.0
+            }
+          }
+        },
+        "test_kmu": {
+          "samples": 180,
+          "accuracy": 0.8722222222222222,
+          "balanced_accuracy": 0.8861111111111111,
+          "macro_f1": 0.871588119164244,
+          "confusion": [
+            [
+              40,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              30,
+              0,
+              7,
+              1,
+              2,
+              0
+            ],
+            [
+              0,
+              0,
+              10,
+              0,
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0,
+              40,
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0,
+              0,
+              20,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              3,
+              9,
+              0,
+              17,
+              1
             ],
             [
               0,
@@ -546,237 +390,239 @@
             },
             "1": {
               "samples": 40,
-              "accuracy": 1.0
+              "accuracy": 0.75
             },
             "2": {
-              "samples": 24,
+              "samples": 10,
               "accuracy": 1.0
             },
             "3": {
-              "samples": 42,
-              "accuracy": 0.9761904761904762
+              "samples": 40,
+              "accuracy": 1.0
             },
             "4": {
-              "samples": 36,
+              "samples": 20,
               "accuracy": 1.0
             },
             "5": {
-              "samples": 38,
-              "accuracy": 1.0
+              "samples": 30,
+              "accuracy": 0.5666666666666667
             }
           }
         },
-        "valid_ppb": {
-          "samples": 34,
-          "accuracy": 1.0,
-          "neutral_recall": 1.0,
-          "neutral_as_sad_angry": 0,
+        "valid_raf": {
+          "samples": 1595,
+          "accuracy": 0.6658307210031348,
+          "balanced_accuracy": 0.5188756009540203,
+          "macro_f1": 0.5154470335164765,
           "confusion": [
             [
+              63,
+              17,
+              2,
+              24,
+              21,
+              6,
+              46
+            ],
+            [
+              1,
+              12,
               0,
-              0,
-              0,
-              0,
-              0,
-              0,
-              0
+              10,
+              5,
+              4,
+              2
+            ],
+            [
+              1,
+              6,
+              14,
+              4,
+              17,
+              15,
+              17
+            ],
+            [
+              1,
+              8,
+              5,
+              503,
+              31,
+              8,
+              56
             ],
             [
               0,
-              0,
-              0,
-              0,
-              0,
-              0,
-              0
+              7,
+              5,
+              23,
+              170,
+              5,
+              39
             ],
             [
               0,
-              0,
-              0,
-              0,
-              0,
-              0,
-              0
+              1,
+              2,
+              17,
+              15,
+              44,
+              4
             ],
             [
-              0,
-              0,
-              0,
-              0,
-              0,
-              0,
-              0
-            ],
-            [
-              0,
-              0,
-              0,
-              0,
-              0,
-              0,
-              0
-            ],
-            [
-              0,
-              0,
-              0,
-              0,
-              0,
-              0,
-              0
-            ],
-            [
-              0,
-              0,
-              0,
-              0,
-              0,
-              0,
-              34
+              1,
+              5,
+              4,
+              10,
+              74,
+              14,
+              256
             ]
           ],
           "by_class": {
-            "6": {
+            "0": {
+              "samples": 179,
+              "accuracy": 0.35195530726256985
+            },
+            "1": {
               "samples": 34,
-              "accuracy": 1.0
+              "accuracy": 0.35294117647058826
+            },
+            "2": {
+              "samples": 74,
+              "accuracy": 0.1891891891891892
+            },
+            "3": {
+              "samples": 612,
+              "accuracy": 0.8218954248366013
+            },
+            "4": {
+              "samples": 249,
+              "accuracy": 0.6827309236947792
+            },
+            "5": {
+              "samples": 83,
+              "accuracy": 0.5301204819277109
+            },
+            "6": {
+              "samples": 364,
+              "accuracy": 0.7032967032967034
             }
           }
         },
-        "test_ppb": {
-          "samples": 35,
-          "accuracy": 1.0,
-          "neutral_recall": 1.0,
-          "neutral_as_sad_angry": 0,
+        "test_raf": {
+          "samples": 1469,
+          "accuracy": 0.6140231449965963,
+          "balanced_accuracy": 0.4763687816133075,
+          "macro_f1": 0.4651452104648544,
           "confusion": [
             [
-              0,
-              0,
-              0,
-              0,
-              0,
-              0,
-              0
+              45,
+              18,
+              2,
+              13,
+              28,
+              7,
+              37
+            ],
+            [
+              2,
+              11,
+              1,
+              8,
+              9,
+              5,
+              4
             ],
             [
               0,
-              0,
-              0,
-              0,
-              0,
-              0,
-              0
+              5,
+              8,
+              12,
+              22,
+              16,
+              23
+            ],
+            [
+              1,
+              5,
+              7,
+              448,
+              35,
+              11,
+              65
             ],
             [
               0,
-              0,
-              0,
-              0,
-              0,
-              0,
-              0
+              8,
+              8,
+              30,
+              139,
+              4,
+              38
             ],
             [
               0,
-              0,
-              0,
-              0,
-              0,
-              0,
-              0
+              1,
+              1,
+              8,
+              16,
+              50,
+              3
             ],
             [
-              0,
-              0,
-              0,
-              0,
-              0,
-              0,
-              0
-            ],
-            [
-              0,
-              0,
-              0,
-              0,
-              0,
-              0,
-              0
-            ],
-            [
-              0,
-              0,
-              0,
-              0,
-              0,
-              0,
-              35
+              2,
+              10,
+              2,
+              17,
+              69,
+              14,
+              201
             ]
           ],
           "by_class": {
+            "0": {
+              "samples": 150,
+              "accuracy": 0.3
+            },
+            "1": {
+              "samples": 40,
+              "accuracy": 0.275
+            },
+            "2": {
+              "samples": 86,
+              "accuracy": 0.09302325581395349
+            },
+            "3": {
+              "samples": 572,
+              "accuracy": 0.7832167832167832
+            },
+            "4": {
+              "samples": 227,
+              "accuracy": 0.6123348017621145
+            },
+            "5": {
+              "samples": 79,
+              "accuracy": 0.6329113924050633
+            },
             "6": {
-              "samples": 35,
-              "accuracy": 1.0
+              "samples": 315,
+              "accuracy": 0.638095238095238
             }
           }
         }
-      },
-      "scope": "当前质量优先模型；表情模型只接收匿名灰度图"
+      }
     }
   ],
   "privacy": {
-    "path": "ratio_v2_machine_anonymization",
-    "samples": 220,
-    "gallery_size": 1681,
-    "anonymization_identity_match_rate": 0.16818181818181818,
-    "scope": "220 张 KMU 尾帧；ratio_v2 强几何匿名化；仅统计匿名化路径，不进入表情识别",
-    "note": "身份指标仅用于离线匿名化验证。"
+    "anonymization_identity_match_rate": 0.013863773357444244,
+    "samples": 1659,
+    "gallery_size": 105,
+    "scope": "Independent aligned-face residual-module evaluation against the project Pins classifier"
   },
-  "videos": [
-    {
-      "name": null,
-      "steady_analysis_fps": 33.461829375134315
-    },
-    {
-      "name": null,
-      "steady_analysis_fps": 33.563589935632564
-    },
-    {
-      "name": null,
-      "steady_analysis_fps": 33.29229948921349
-    },
-    {
-      "name": null,
-      "steady_analysis_fps": 33.9925923798182
-    },
-    {
-      "name": null,
-      "steady_analysis_fps": 29.535684226599958
-    },
-    {
-      "name": null,
-      "steady_analysis_fps": 33.37542659736342
-    },
-    {
-      "name": null,
-      "steady_analysis_fps": 33.55835969535189
-    },
-    {
-      "name": null,
-      "steady_analysis_fps": 31.099562626477024
-    },
-    {
-      "name": null,
-      "steady_analysis_fps": 29.12665756193218
-    },
-    {
-      "name": null,
-      "steady_analysis_fps": 31.615086652698377
-    },
-    {
-      "name": null,
-      "steady_analysis_fps": 33.879313326170035
-    }
-  ],
-  "note": "静态汇总仅供桌面表现页展示；不包含逐样本实验输出、身份诊断明细或原始用户图像。"
+  "videos": [],
+  "scope": "FER-2013 primary training, KMU auxiliary. Six-class KMU and seven-class FER/RAF remain separate. Initial weights have earlier multi-domain training history; current-stage held-out results are regression measurements, not strict never-seen-person claims.",
+  "expression_checkpoint_sha256": "f747deacc851b6b8d48beee05e58b095f75196d487263f5c9cd61eb6d61727fb",
+  "best_validation_domain": "valid_kmu"
 }

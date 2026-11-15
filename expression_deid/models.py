@@ -1,4 +1,4 @@
-"""Small PyTorch models used by the three project branches.
+"""PyTorch networks used by the three project modules.
 
 PyTorch is deliberately imported lazily.  The preprocessing and alignment
 utilities stay usable in a light environment, while training and inference
@@ -139,11 +139,83 @@ def _build_models():
             residual = 0.25 * torch.tanh(self.output(d1))
             return torch.clamp(x + residual, 0.0, 1.0)
 
+
+
+    class SpatialIdentityNet(IdentityNet):
+        """Retain facial layout instead of discarding it in global pooling."""
+        def __init__(self, num_identities, embedding_dim=256):
+            super().__init__(num_identities,embedding_dim)
+            self.backbone.features[-1]=nn.AdaptiveAvgPool2d((2,2))
+            self.backbone.projection=nn.Sequential(nn.Flatten(),nn.Linear(768,embedding_dim),
+                nn.ReLU(inplace=True),nn.Dropout(.2))
+            self.architecture='spatial_identity_v2'
+
+    class TransferBackbone(nn.Module):
+        """A grayscale ResNet feature encoder; checkpoint loading never downloads weights."""
+        def __init__(self,embedding_dim=512):
+            super().__init__()
+            from torchvision.models import resnet18
+            network=resnet18(weights=None)
+            network.conv1=nn.Conv2d(1,64,7,stride=2,padding=3,bias=False)
+            self.features=nn.Sequential(*list(network.children())[:-1])
+            self.projection=nn.Identity() if embedding_dim==512 else nn.Linear(512,embedding_dim)
+
+        def initialize_imagenet(self,path):
+            from torchvision.models import resnet18
+            state=path if isinstance(path,dict) else torch.load(path,map_location='cpu',weights_only=True)
+            network=resnet18(weights=None)
+            network.load_state_dict(state)
+            # Repeating a gray channel three times is equivalent to summing,
+            # rather than averaging, the pretrained first-layer channel weights.
+            with torch.no_grad():
+                self.features[0].weight.copy_(network.conv1.weight.sum(1,keepdim=True))
+            for index,layer in enumerate(list(network.children())[1:-1],1):
+                self.features[index].load_state_dict(layer.state_dict())
+
+        def forward(self,x):
+            x=F.interpolate(x,size=(160,160),mode='bilinear',align_corners=False)
+            return self.projection(self.features(x).flatten(1))
+
+    class TransferIdentityNet(nn.Module):
+        def __init__(self,num_identities,embedding_dim=512):
+            super().__init__()
+            self.backbone=TransferBackbone(embedding_dim)
+            self.classifier=nn.Linear(embedding_dim,num_identities)
+            self.architecture='resnet18_gray_identity_v3'
+        def forward(self,x): return self.classifier(self.backbone(x))
+        def embedding(self,x): return F.normalize(self.backbone(x),dim=1)
+
+
+
+
+
+
+    class MaskedAnonymizer(nn.Module):
+        """Learn local face edits with an exact unchanged exterior."""
+
+        def __init__(self):
+            super().__init__()
+            self.generator = AnonymizerUNet()
+            nn.init.zeros_(self.generator.output.weight)
+            nn.init.zeros_(self.generator.output.bias)
+            y, x = torch.meshgrid(torch.arange(100), torch.arange(100), indexing='ij')
+            radius = ((x-50)/34)**2 + ((y-56)/42)**2
+            self.register_buffer('face_mask', ((1-radius)*8).clamp(0,1)[None,None].float())
+            self.architecture = 'masked_residual_v2'
+
+        def forward(self, x):
+            if x.shape[-2:] != (100,100):
+                raise ValueError('Masked anonymization requires aligned 100x100 grayscale faces')
+            return x + self.face_mask * (self.generator(x)-x)
+
     return {
         "FaceBackbone": FaceBackbone,
         "ExpressionNet": ExpressionNet,
         "IdentityNet": IdentityNet,
+        "SpatialIdentityNet": SpatialIdentityNet,
+        "TransferIdentityNet": TransferIdentityNet,
         "AnonymizerUNet": AnonymizerUNet,
+        "MaskedAnonymizer": MaskedAnonymizer,
     }
 
 
@@ -157,7 +229,7 @@ def model_class(name: str):
 
 def __getattr__(name: str):
     """Expose model classes without importing PyTorch for preprocessing users."""
-    if name in {"FaceBackbone", "ExpressionNet", "IdentityNet", "AnonymizerUNet"}:
+    if name in {"FaceBackbone", "ExpressionNet", "IdentityNet", "SpatialIdentityNet", "TransferIdentityNet", "AnonymizerUNet", "MaskedAnonymizer"}:
         return model_class(name)
     raise AttributeError(name)
 
@@ -178,6 +250,12 @@ def checkpoint_payload(model, *, kind: str, epoch: int = 0, metrics: dict[str, A
 
 def _model_config(model, kind: str) -> dict[str, Any]:
     config: dict[str, Any] = {"kind": kind}
+    if hasattr(model, 'architecture'):
+        config['architecture'] = model.architecture
+    if hasattr(model, 'eval_flip'):
+        config['eval_flip'] = bool(model.eval_flip)
+    if hasattr(model, 'input_size'):
+        config['input_size'] = int(model.input_size)
     if hasattr(model, "classifier"):
         config["num_classes"] = int(model.classifier.out_features)
         config["embedding_dim"] = int(model.classifier.in_features)
@@ -185,10 +263,24 @@ def _model_config(model, kind: str) -> dict[str, Any]:
 
 
 def save_checkpoint(model, path, *, kind: str, epoch: int = 0, metrics: dict[str, Any] | None = None):
+    save_checkpoint_payload(checkpoint_payload(model, kind=kind, epoch=epoch, metrics=metrics), path)
+
+
+def save_checkpoint_payload(payload, path):
+    """Publish one complete checkpoint, preserving the previous best if saving fails."""
+    import tempfile
+    import os
     torch, _, _ = require_torch()
     output = Path(path)
     output.parent.mkdir(parents=True, exist_ok=True)
-    torch.save(checkpoint_payload(model, kind=kind, epoch=epoch, metrics=metrics), output)
+    descriptor, temporary = tempfile.mkstemp(prefix=output.name+'.', suffix='.tmp', dir=output.parent)
+    os.close(descriptor)
+    temporary = Path(temporary)
+    try:
+        torch.save(payload, temporary)
+        temporary.replace(output)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def load_checkpoint(path, *, device="cpu"):
@@ -206,17 +298,20 @@ def load_checkpoint(path, *, device="cpu"):
     kind = payload.get("kind") or payload.get("model_config", {}).get("kind")
     config = payload.get("model_config", {})
     if kind == "expression":
-        model = model_class("ExpressionNet")(
+        architecture=config.get('architecture')
+        if architecture not in (None,'compact_expression_v1'):
+            raise ValueError(f'Unsupported expression architecture: {architecture}')
+        model = model_class('ExpressionNet')(
             num_classes=int(config.get("num_classes", 7)),
             embedding_dim=int(config.get("embedding_dim", 128)),
         )
     elif kind == "identity":
-        model = model_class("IdentityNet")(
+        model = model_class({'resnet18_gray_identity_v3':'TransferIdentityNet','spatial_identity_v2':'SpatialIdentityNet'}.get(config.get('architecture'),'IdentityNet'))(
             num_identities=int(config["num_classes"]),
             embedding_dim=int(config.get("embedding_dim", 128)),
         )
     elif kind == "anonymizer":
-        model = model_class("AnonymizerUNet")()
+        model = model_class("MaskedAnonymizer" if config.get('architecture') == 'masked_residual_v2' else "AnonymizerUNet")()
     else:
         raise ValueError(f"检查点没有支持的 kind: {kind!r}")
     model.load_state_dict(payload["state_dict"])

@@ -79,12 +79,12 @@ class AuditRegressions(unittest.TestCase):
 
     def test_face_only_training_crop_preserves_gradient(self):
         import torch
-        from expression_deid.training.train import _identity_face_only_differentiable, _identity_face_only_batch
+        from expression_deid.training.required_training import face_only
         torch.manual_seed(8)
         source = torch.rand(2, 1, 100, 100, requires_grad=True)
-        result = _identity_face_only_differentiable(source)
-        expected = _identity_face_only_batch(source)
-        self.assertLess(float((result-expected).abs().mean().detach()), 2/255)
+        result = face_only(source)
+        changed=source.detach().clone(); changed[:,:,:12]=1; changed[:,:,:,:12]=0
+        self.assertTrue(torch.equal(result.detach(),face_only(changed)))
         result.square().mean().backward()
         self.assertTrue(torch.isfinite(source.grad).all())
         self.assertGreater(float(source.grad.abs().sum()), 0)

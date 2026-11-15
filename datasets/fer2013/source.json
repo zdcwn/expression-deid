@@ -1,0 +1,8 @@
+{
+  "dataset": "fer2013",
+  "source_type": "existing original FER-2013 CSV",
+  "file": "fer2013.csv",
+  "bytes": 301072766,
+  "sha256": "3b8d9617d1017f34733c8f2474d7784c563ce86c40a86ac12c2d37cc968f871b",
+  "labels": "original emotion column"
+}

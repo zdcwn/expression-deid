@@ -1,0 +1,111 @@
+{
+  "recipe": "runtime_domain_fer2013_expression",
+  "datasets": {
+    "primary": "fer2013",
+    "auxiliary": [
+      "kmu"
+    ],
+    "primary_sampling_fraction": 0.85
+  },
+  "initialization_checkpoint_sha256": "c9b46b916d6a62bd20f10458bffc9ad4412936b3593ecc2bf387615ed78ce7cf",
+  "anonymizer_sha256": "8ae852a051439fd77c542dca77abf329bce4c2cc9746d2d6b5a2cd0af689dec9",
+  "expression_input_source": "anonymized_only",
+  "selection_scope": "FER-2013 and selected auxiliary validation only; external test sets never select epochs",
+  "best_valid_score": 0.6255849869307514,
+  "completed_epochs": 16,
+  "stop_reason": "No meaningful improvement on the fixed validation criterion",
+  "status": "complete",
+  "calibration": {
+    "temperature": 1.1,
+    "nll_before": 1.0346734270453453,
+    "nll_after": 1.0316974103450776,
+    "source": "FER-2013 and selected auxiliary validation only"
+  },
+  "selected_epoch": 11,
+  "selected_model_sha256": "f747deacc851b6b8d48beee05e58b095f75196d487263f5c9cd61eb6d61727fb",
+  "selected_validation": {
+    "fer2013": {
+      "samples": 3543,
+      "accuracy": 0.5740897544453852,
+      "balanced_accuracy": 0.5295471917144824,
+      "by_class": {
+        "0": {
+          "samples": 392,
+          "accuracy": 0.7168367346938775
+        },
+        "1": {
+          "samples": 494,
+          "accuracy": 0.3340080971659919
+        },
+        "2": {
+          "samples": 55,
+          "accuracy": 0.36363636363636365
+        },
+        "3": {
+          "samples": 890,
+          "accuracy": 0.7932584269662921
+        },
+        "4": {
+          "samples": 650,
+          "accuracy": 0.45076923076923076
+        },
+        "5": {
+          "samples": 461,
+          "accuracy": 0.4360086767895879
+        },
+        "6": {
+          "samples": 601,
+          "accuracy": 0.6123128119800333
+        }
+      }
+    },
+    "kmu": {
+      "samples": 230,
+      "accuracy": 0.9173913043478261,
+      "balanced_accuracy": 0.9208333333333334,
+      "by_class": {
+        "0": {
+          "samples": 40,
+          "accuracy": 0.975
+        },
+        "1": {
+          "samples": 30,
+          "accuracy": 1.0
+        },
+        "2": {
+          "samples": 40,
+          "accuracy": 0.6
+        },
+        "3": {
+          "samples": 40,
+          "accuracy": 0.975
+        },
+        "4": {
+          "samples": 40,
+          "accuracy": 0.975
+        },
+        "5": {
+          "samples": 40,
+          "accuracy": 1.0
+        }
+      }
+    }
+  },
+  "training_samples": {
+    "fer2013": 28006,
+    "kmu": 690
+  },
+  "optimizer": {
+    "name": "AdamW",
+    "initial_lr": 0.0001,
+    "weight_decay": 0.0001,
+    "batch_size": 128
+  },
+  "normalization": {
+    "mean": 0.481619,
+    "std": 0.242606,
+    "channels": 1,
+    "space": "gray_0_1",
+    "source": "fixed runtime gray normalization"
+  }
+}

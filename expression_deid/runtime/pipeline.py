@@ -15,6 +15,7 @@ from expression_deid.preprocessing.normalize import iter_raf, load_gray, load_st
 from expression_deid.labels import EXPRESSION_NAMES, EXPRESSION_ZH
 from expression_deid.config import KMU_ALIGNED_DIR, ROOT
 from expression_deid.preprocessing.prepare import iter_kmu_aligned
+from expression_deid.runtime.anonymization import FaceLandmarksUnavailable
 
 
 class AnonymizationUnavailable(RuntimeError):
@@ -42,6 +43,15 @@ class ExpressionDeidentifier:
         self.anonymizer, self.anonymizer_meta = load_checkpoint(anonymizer_checkpoint, device=self.device)
         self.expression_model, self.expression_meta = load_checkpoint(expression_checkpoint, device=self.device)
         self.machine_privacy = dict(self.expression_meta.get('metrics', {}).get('machine_privacy', {}))
+        self.runtime_domain_expression = self.expression_meta.get('metrics', {}).get('recipe') in {
+            'runtime_domain_raf_kmu_expression', 'runtime_domain_fer2013_expression',
+        }
+        if self.runtime_domain_expression:
+            import hashlib
+            with Path(anonymizer_checkpoint).open('rb') as handle:
+                actual_digest = hashlib.file_digest(handle, 'sha256').hexdigest()
+            if actual_digest != self.expression_meta['metrics'].get('anonymizer_sha256'):
+                raise ValueError('当前表情权重与匿名化模型不匹配')
         if self.anonymizer_meta.get("kind") != "anonymizer":
             raise ValueError("anonymizer_checkpoint 不是匿名化模型检查点")
         # Only checkpoints trained with the explicit identity-margin loss are
@@ -59,7 +69,7 @@ class ExpressionDeidentifier:
         # probabilities when companion checkpoints are available.
         self.expression_models = [(self.expression_model, self.expression_meta)]
         primary_path = Path(expression_checkpoint).resolve()
-        companion_checkpoints = () if self.fast_mode else (ROOT / "models" / "training" / "expression_raf.pt", ROOT / "models" / "training" / "expression_joint.pt")
+        companion_checkpoints = () if self.fast_mode or self.runtime_domain_expression else (ROOT / "models" / "training" / "expression_raf.pt", ROOT / "models" / "training" / "expression_joint.pt")
         for candidate in companion_checkpoints:
             if not candidate.is_file() or candidate.resolve() == primary_path:
                 continue
@@ -84,6 +94,13 @@ class ExpressionDeidentifier:
             if self.fast_mode and self.device.type == "cuda":
                 self.identity_model.half()
         self.stats = load_stats()
+        normalization = self.expression_meta.get('metrics', {}).get('normalization', {})
+        if normalization:
+            from types import SimpleNamespace
+            mean, std = float(normalization['mean']), float(normalization['std'])
+            if not np.isfinite([mean, std]).all() or std <= 0:
+                raise ValueError('Invalid expression checkpoint normalization')
+            self.stats = SimpleNamespace(mean=mean, std=std)
         self.auto_align = bool(auto_align)
         self.detector = None
         self.expression_temperature = float(
@@ -553,7 +570,7 @@ class ExpressionDeidentifier:
 
     def _machine_runtime_candidate(self, aligned_gray, variant=3):
         """Fast machine-private candidate used before expression inference."""
-        if self.ganonymization_backend is None:
+        if self.ganonymization_backend is None or getattr(self, 'runtime_domain_expression', False):
             candidate = self._learned_component_edit(
                 self._component_anonymize(
                     self._resize(aligned_gray),
@@ -693,7 +710,10 @@ class ExpressionDeidentifier:
         # complete face.  An explicitly supplied GANonymization checkpoint is
         # an offline/high-quality alternative: its generator receives only
         # landmarks and is composited inside the inner face ellipse.
-        if purpose == "machine" and self.ganonymization_backend is not None:
+        use_generated_mask = self.ganonymization_backend is not None and not (
+            purpose == 'machine' and getattr(self, 'runtime_domain_expression', False)
+        )
+        if purpose == "machine" and use_generated_mask:
             output = self._machine_runtime_candidate(aligned256 if is_raw else raw_gray)
         elif purpose == "machine":
             # Realtime fallback: local component edit plus learned residual.
@@ -712,7 +732,7 @@ class ExpressionDeidentifier:
         # background remain exact copies of the grayscale source frame.
         composited = self._composite_component_edit(
             raw_gray, output, face, matrix,
-            mask_mode="face" if self.ganonymization_backend is not None else self.machine_privacy.get('mask_mode', 'features') if purpose == 'machine' else 'features',
+            mask_mode="face" if use_generated_mask else self.machine_privacy.get('mask_mode', 'features') if purpose == 'machine' else 'features',
         )
         # The classifier must see the pixels actually displayed after pasting
         # the edits into the video, including boundary blending/resampling.
@@ -765,11 +785,26 @@ class ExpressionDeidentifier:
 
         # Machine path: local residual/component edit, used by expression and
         # the internal privacy diagnostic.  It never sees the display output.
-        machine_anonymized = self.anonymize(
-            image,
-            aligned=aligned,
-            purpose="machine",
-        )
+        try:
+            machine_anonymized = self.anonymize(
+                image,
+                aligned=aligned,
+                purpose="machine",
+            )
+        except FaceLandmarksUnavailable:
+            # Dense landmark estimation is an optional visual enhancement.  A
+            # difficult aligned sample must still produce a valid local edit
+            # for the classifier instead of aborting the whole image batch.
+            backend = self.ganonymization_backend
+            self.ganonymization_backend = None
+            try:
+                machine_anonymized = self.anonymize(
+                    image,
+                    aligned=aligned,
+                    purpose="machine",
+                )
+            finally:
+                self.ganonymization_backend = backend
         expression_input = (
             self._last_anonymized_aligned
             if self._last_anonymized_aligned is not None
@@ -780,7 +815,15 @@ class ExpressionDeidentifier:
         expression_anonymized["raw_confidence"] = raw_anon_confidence
         # Human-facing branch is generated independently after the machine
         # branch.  It is never passed to the expression model.
-        anonymized = self._display_from_last_source()
+        try:
+            anonymized = self._display_from_last_source()
+        except FaceLandmarksUnavailable:
+            backend = self.ganonymization_backend
+            self.ganonymization_backend = None
+            try:
+                anonymized = self._display_from_last_source()
+            finally:
+                self.ganonymization_backend = backend
         display_aligned = self._last_display_aligned
         result = {
             "original": raw_input if was_raw else self._image_gray(image),
@@ -850,8 +893,16 @@ class ExpressionDeidentifier:
     def predict_identity(self, image, *, aligned=None):
         if self.identity_model is None:
             raise RuntimeError("没有加载 identity_checkpoint")
-        gray = self._face_only_view(self._prepare_gray(image, aligned=aligned))
-        x = self._tensor(gray, normalized=True)
+        gray = self._prepare_gray(image, aligned=aligned)
+        spec = (self.identity_meta or {}).get('metrics', {})
+        if spec.get('datasets', {}).get('primary') == 'pins':
+            from expression_deid.training.required_training import face_only, normalize
+            torch, _, _ = require_torch()
+            x = torch.as_tensor(gray.copy(), device=self.device, dtype=torch.float32)[None, None] / 255
+            x = normalize(face_only(x), spec['normalization'])
+            x = x.to(dtype=next(self.identity_model.parameters()).dtype)
+        else:
+            x = self._tensor(self._face_only_view(gray), normalized=True)
         with self._inference_mode():
             logits = self.identity_model(x)
             embedding = self.identity_model.embedding(x).detach().cpu().numpy()[0]

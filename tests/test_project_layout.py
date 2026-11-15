@@ -31,18 +31,17 @@ class ProjectLayoutTests(unittest.TestCase):
     def test_candidate_training_outputs_cannot_overwrite_runtime_weights(self):
         from expression_deid.cli import build_parser
         parser = build_parser()
-        for command in ['train-expression', 'train-identity', 'train-expression-kmu', 'train-expression-joint']:
-            args = parser.parse_args([command])
+        for command in ['train-expression', 'train-identity', 'train-anonymizer']:
+            extra=['--anonymizer-checkpoint','unused'] if command=='train-expression' else ['--identity-checkpoint','unused'] if command=='train-anonymizer' else []
+            args = parser.parse_args([command]+extra)
             self.assertEqual(Path(args.output).parent, Path('models/training'))
 
-    def test_quality_contract_keeps_its_weight_bundle_together(self):
-        import hashlib
-        import json
+    def test_selected_runtime_models_match_manifest(self):
+        import hashlib,json
         from expression_deid.config import ROOT
-        manifest = ROOT/'models/expression/expression_video_quality.json'
-        spec = json.loads(manifest.read_text(encoding='utf8'))
-        for key in ['compact_model', 'quality_model']:
-            target = manifest.parent/spec[key]['file']
-            self.assertTrue(target.is_file())
-            with target.open('rb') as stream:
-                self.assertEqual(hashlib.file_digest(stream, 'sha256').hexdigest(), spec[key]['sha256'])
+        spec=json.loads((ROOT/'configs/runtime_models.json').read_text(encoding='utf-8'))
+        for key in ('identity','anonymizer'):
+            target=ROOT/spec[key]['file']
+            self.assertEqual(hashlib.sha256(target.read_bytes()).hexdigest(),spec[key]['sha256'])
+        expression=ROOT/spec['expression']['current']
+        self.assertEqual(hashlib.sha256(expression.read_bytes()).hexdigest(),spec['expression_sha256'])

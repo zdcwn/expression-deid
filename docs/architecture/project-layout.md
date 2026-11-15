@@ -20,12 +20,14 @@
 | `preprocessing/feature_geometry.py` | 局部几何和身份比例编辑的几何运算 |
 | `preprocessing/prepare.py` | KMU 对齐、处理清单与统计量准备 |
 | `preprocessing/prepare_ppb.py` | PPB 中央红外中性视频抽帧与对齐 |
-| `training/data.py` | 数据集读取、标签映射、人员/序列划分与数据增强 |
-| `training/train.py` | 表情、身份、匿名化和联合适配训练；计算损失并选择检查点 |
-| `training/evaluate.py` | 对给定模型与数据集做离线评价并输出统计 |
+| `training/required_data.py` | 三个指定主数据集、唯一辅助集、标签和去重划分检查 |
+| `training/train.py`、`training/required_training.py` | 统一命令分派；训练身份与匿名化 |
+| `training/expression_current.py` | FER 主训练、KMU 辅助、验证选模与概率校准 |
+| `training/required_evaluate.py` | 独立划分的身份、匿名化和匿名表情评价，可复测完整原始照片 |
+| `runtime/required_pipeline.py` | 对齐残差组件的诊断流程，不是当前桌面默认流程 |
 | `runtime/pipeline.py` | 单图的局部匿名化、区域合成与匿名表情推理 |
 | `runtime/anonymization.py` | 关键点条件生成组件与局部合成支持 |
-| `runtime/expression.py` | 质量表情模型加载、输入契约与哈希核对、匿名图概率输出 |
+| `runtime/restored_expression.py` | 单一表情检查点的匿名输入校验、归一化和概率输出 |
 | `runtime/temporal.py` | 因果表情滤波、连续证据和状态重置 |
 | `runtime/video.py` | 视频编解码、检测复用、跟踪、逐帧匿名分析与计时 |
 | `ui/desktop.py` | 三页桌面、工作线程、图片缓存、视频及摄像头操作 |
@@ -34,49 +36,23 @@
 
 运行侧的依赖方向为 `ui → runtime → preprocessing/models`。训练侧使用相同的预处理和网络定义，并在匿名域适配时调用匿名化接口；模型类本身不依赖桌面窗口。
 
-## 二、训练在哪儿，产物到哪儿
+## 二、训练入口与产物
 
-常规训练由 `python -m expression_deid` 调用 `training/train.py`。在项目根目录运行：
-
-| 命令 | 主要输入 | 默认产物 |
+| 入口 | 输入 | 候选产物 |
 |---|---|---|
-| `prepare` | KMU 源图、检测模型 | `datasets/kmu-fed-aligned/`、统计量 |
-| `train-expression` | RAF-DB 训练/验证图 | `models/training/expression.pt` |
-| `train-identity` | 对齐图与人员编号 | `models/training/identity.pt` |
-| `train-expression-kmu` | 基线检查点、KMU 对齐图 | `models/training/expression_kmu.pt` |
-| `train-expression-joint` | 基线检查点及配置的数据域 | `models/training/expression_joint.pt` |
-| `train-anonymizer` | 自建身份/表情检查点与对齐图 | `models/training/anonymizer.pt` |
+| `train-identity` | Pins，面部椭圆归一化 | `models/training/identity_pins.pt` |
+| `train-anonymizer` | CelebA-HQ，冻结 Pins 身份器 | `models/training/anonymizer_celebahq.pt` |
+| `train-expression` | 当前完整运行流程产生的 FER/KMU 匿名缓存 | `models/training/expression_fer2013/best.pt` |
+| `scripts/checks/check_current_expression.py` | 固定表情检查点、来源和匿名缓存 | `outputs/verification/expression-validation.json` |
 
-训练入口接受 `--output`，可以指定新的候选路径。默认候选与运行权重分开，训练不会悄悄改变桌面端当前加载的版本。
-
-专用训练分为三个入口：
-
-1. `scripts/training/train_realtime_expression.py` 先生成匿名缓存，也可在该缓存上训练轻量候选。`--prepare-only` 只准备数据，`--cache` 指定缓存路径；默认候选为 `models/training/expression_realtime_candidate.pt`。
-2. `scripts/training/train_video_quality.py` 接收 `--anonymous-cache`、`--initial` 与 `--output`。初始化检查点应包含分类头、特征均值和标准差；训练目录生成 `best.pt`、`best_valid.npz` 和 `training.json`。
-3. `scripts/export/export_video_quality.py` 将选中的质量检查点导出为 TorchScript，验证导出前后的输出，并生成配套 JSON。
-
-例如，使用已经准备好的匿名缓存和质量初始化检查点：
+表情继续适配实现位于 `training/expression_current.py`，FER/KMU 抽样比例 85%/15%，弱增强加输出一致性约束。初始化权重含历史多域学习；固定模型后分别评估 FER、KMU、RAF，最高验证结果为 KMU 六类 91.74%（230 张）。完整参数及指标见 README 和检查点元数据。
 
 ```powershell
-python scripts/training/train_video_quality.py `
-  --anonymous-cache outputs/realtime_training/anonymous_cache.npz `
-  --initial models/training/quality_initial.pt `
-  --output models/training/quality_run --device cuda
-
-python scripts/export/export_video_quality.py `
-  --checkpoint models/training/quality_run/best.pt `
-  --onnx models/training/enet_b2_7.onnx `
-  --output models/training/quality_bundle --device cuda
+python scripts/checks/check_current_expression.py --data-root datasets --device cuda
+python -m expression_deid train-expression --data-root datasets --device cuda
 ```
 
-导出目录是一组可共同校验的文件：质量 TorchScript、轻量表情权重及 JSON。先以该目录的 JSON 运行质量验证，再决定部署；候选不会被桌面端自动扫描。
-
-```powershell
-python scripts/checks/check_video_quality.py `
-  --manifest models/training/quality_bundle/expression_video_quality.json `
-  --anonymous-cache outputs/realtime_training/anonymous_cache.npz `
-  --output outputs/evaluation/quality_candidate --device cuda
-```
+缓存必须是 `anonymous-runtime.npy/json`，附带源图、标签、划分和匿名权重摘要。原图不进入表情分类器。`required_evaluate.py` 仅用于对齐残差组件的指定数据诊断，与当前完整运行缓存的表情复测分别记录。
 
 ## 三、运行模型如何接入界面
 
@@ -115,7 +91,7 @@ python scripts/checks/check_training_paths.py
 python scripts/checks/check_desktop_presentation.py --device cuda
 ```
 
-训练检查需要已准备的匿名缓存；它验证训练入口、梯度和检查点读写，不作为模型准确率。详细评价由具体数据集和质量验证脚本完成。结构整理不改变数据集划分、匿名化算法和已经发布的模型指标。
+训练检查会建立临时小样本，验证三个阶段的梯度、检查点读写和匿名区域边界，不作为模型准确率。当前运行表情模型以 FER 为主训练；v1.1.0 发行包使用相同模型和固定指标。
 
 ## 六、桌面软件发行
 

@@ -1,0 +1,24 @@
+{
+  "schema": 1,
+  "anonymization": {
+    "primary": "celebahq",
+    "auxiliary": [],
+    "root": "datasets/celebahq"
+  },
+  "expression": {
+    "primary": "fer2013",
+    "auxiliary": [
+      "kmu"
+    ],
+    "root": "datasets/fer2013",
+    "primary_sampling_fraction": 0.85
+  },
+  "identity": {
+    "primary": "pins",
+    "auxiliary": [],
+    "root": "datasets/pins"
+  },
+  "max_auxiliary_per_module": 1,
+  "minimum_primary_sampling_fraction": 0.75,
+  "expression_input_source": "anonymized_only"
+}

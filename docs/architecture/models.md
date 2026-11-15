@@ -1,15 +1,21 @@
-# 模型接入与文件职责
+# 当前模型与调用关系
 
-网络结构和检查点读写由 `expression_deid/models.py` 实现；权重按功能保存在 `models/`。逐个运行文件见[模型清单](../../models/README.md)，训练入口与产物位置见[工程目录](project-layout.md)。
+## 处理流程
 
-## 运行调用
+图片、视频、摄像头 → 灰度化和定位对齐 → 统一人脸匿名化模块 → 匿名灰度脸 → 表情 CNN → 类别、置信度、因果时序状态。
 
-`ui/opencv_demo.py` 中的 `build_pipeline` 装配当前发布权重，`runtime/pipeline.py` 执行局部匿名化和匿名表情分析。检测使用 `preprocessing/detect.py`，关键点条件组件由 `runtime/anonymization.py` 加载。文件路径均从项目根目录解析。
+`ui/opencv_demo.py::build_pipeline` 装配运行资源；`runtime/pipeline.py` 执行局部编辑、合成和表情推理，`runtime/video.py` 管理逐帧跟踪。`ui/desktop.py` 接收结果，不自行构造类别或概率。命令行 `infer` 也使用该完整运行流程。
 
-质量视频表情由 `runtime/expression.py` 加载 `models/expression/expression_video_quality.json`，核对来源标记、类别顺序、预处理和两个表情权重的 SHA-256。匿名输入限定为 `100×100 uint8` 灰度脸。视频模块负责连续帧状态，UI 不直接拼造模型概率。
+匿名化和身份模型保留已确认版本；表情使用 FER-2013 为主、KMU 为辅重新适配的四组卷积 CNN，图片与视频复用同一权重。实际模型文件和摘要见 `configs/runtime_models.json`。
 
-## 训练与部署
+## 输入与评价
 
-`training/train.py` 保留表情、匿名化和项目自建身份模型的训练入口。身份模型用于离线训练和评价，不在桌面实时识别链路中加载。
+分类器只接收实际局部匿名化、贴回和重新对齐后的 100×100 灰度脸。显示处理不改变分类输入域。缓存记录源数组、标签、划分及匿名权重摘要，生成缓存时不调用表情预测。
 
-训练默认产物位于 `models/training/`，目录中的候选不参与运行时自动选择。质量候选经过 `scripts/export/export_video_quality.py` 导出后，以配套 JSON 进行验证，再明确部署到 `models/expression/`。关键点条件权重由 Git LFS 管理，第三方实现和许可放在 `third_party/`。
+`check_current_expression.py` 固定检查点后，分别评价 FER、KMU 和 RAF 的完整验证/测试划分，并抽查运行输入与缓存逐像素一致。最高验证结果为 KMU 六类 91.74%（230 张），其他分域结果及训练来源分别见 `docs/validation/expression-validation.json`、`expression-training.json`。初始化含历史多域学习，当前留出结果按本轮回归范围解释。
+
+`required_evaluate.py` 与 `required_pipeline.py` 保留对齐残差组件的诊断用途；Pins 原脸 94.27%、残差匿名后 1.39% 专属于该组件，不替代完整运行流程的表情复测。
+
+## 训练与发行
+
+`training/required_training.py` 训练 Pins 身份与 CelebA-HQ 匿名化，`training/expression_current.py` 负责 FER 主训练及 KMU 辅助。表情候选保存在 `models/training/expression_fer2013/best.pt`。发行构建读取同一运行清单，不扫描候选目录；旧质量模型与重复表情权重已经清理。

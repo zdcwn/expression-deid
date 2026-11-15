@@ -1,0 +1,32 @@
+{
+  "dataset": "fer2013",
+  "labels": "original FER-2013 emotion column",
+  "csv_sha256": "3b8d9617d1017f34733c8f2474d7784c563ce86c40a86ac12c2d37cc968f871b",
+  "official_split_counts": {
+    "train": 28709,
+    "valid": 3589,
+    "test": 3589
+  },
+  "cross_split_duplicates_removed": 749,
+  "split_scope": "official Usage; validation and test pixel overlap removed from lower-priority splits",
+  "samples": 35138,
+  "splits": {
+    "train": 28006,
+    "valid": 3543,
+    "test": 3589
+  },
+  "shape": [
+    100,
+    100
+  ],
+  "channels": 1,
+  "class_counts": {
+    "5": 4831,
+    "1": 5010,
+    "4": 6024,
+    "6": 6144,
+    "3": 8926,
+    "0": 3704,
+    "2": 499
+  }
+}
