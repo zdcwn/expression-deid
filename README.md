@@ -26,6 +26,7 @@ expression-deid/
 │  ├─ detection/                检测与关键点权重
 │  ├─ anonymization/            匿名化运行权重
 │  ├─ expression/               表情运行权重及输入契约
+│  ├─ identity/                 Pins 身份识别运行权重
 │  └─ training/                 本地训练候选，不自动替换运行权重
 ├─ examples/videos/             随项目提供的示例视频
 ├─ outputs/                     本地缓存、日志及推理结果

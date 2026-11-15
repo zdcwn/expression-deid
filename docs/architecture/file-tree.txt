@@ -104,10 +104,6 @@ expression-deid/
 ├─ reports/
 │  ├─ .gitignore
 │  ├─ README.md
-│  ├─ archive/
-│  │  ├─ README.md
-│  │  ├─ teacher_project_report.docx
-│  │  └─ teacher_project_report.md
 │  ├─ build_reports.ps1
 │  ├─ template-license/
 │  │  ├─ LICENSE

@@ -78,7 +78,6 @@ python -m expression_deid train-expression --data-root datasets --device cuda
 | `docs/handoff.md` | 接手与运行步骤 | 使用当前目录和命令 |
 | `reports/tongji_final_report/` | 最终报告源码、图和 PDF | 主文件 `main.tex` |
 | `reports/tongji_project_plan/` | 计划书源码、图和 PDF | 主文件 `main.tex` |
-| `reports/archive/` | 早期说明稿 | 保留查阅，不作当前运行入口 |
 
 ## 五、整理后的检查顺序
 
